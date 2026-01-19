@@ -20,10 +20,12 @@ go get github.com/invopop/xmlctx
 
 ```go
 type Person struct {
-    Name    string `xml:"name"`
-    Email   string `xml:"email"`
-    City    string `xml:"addr:city"`
-    Country string `xml:"addr:country"`
+    XMLName xml.Name `xml:"http://example.com/user person"`
+    XmlnsA  string   `xml:"xmlns:addr,attr"`
+    Name    string   `xml:"name"`
+    Email   string   `xml:"email"`
+    City    string   `xml:"addr:city"`
+    Country string   `xml:"addr:country"`
 }
 
 var person Person
@@ -59,7 +61,9 @@ All work with:
 
 ```go
 type User struct {
-    Bio string `xml:"ns1:bio"`
+    XMLName xml.Name `xml:"user"`
+    XmlnsNS string   `xml:"xmlns:ns1,attr"`
+    Bio     string   `xml:"ns1:bio"`
 }
 
 xmlctx.Parse(data, &user, xmlctx.WithNamespaces(map[string]string{
