@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Invalid: Profile elements have no namespace (empty default namespace) -->
+<user xmlns="http://example.com/schema/user" xmlns:ns2="http://example.com/schema/address" id="user-123" version="1.0">
+  <name>John Doe</name>
+  <email>john.doe@example.com</email>
+  <profile xmlns="" visibility="public" verified="true">
+    <bio>Software engineer and open source enthusiast</bio>
+    <avatar-url>https://example.com/avatars/john.jpg</avatar-url>
+    <tag>developer</tag>
+    <tag>golang</tag>
+    <tag>xml</tag>
+  </profile>
+  <settings xmlns="">
+    <theme>dark</theme>
+    <language>en-US</language>
+    <notification enabled="true">
+      <email>true</email>
+      <push>false</push>
+      <frequency>daily</frequency>
+    </notification>
+  </settings>
+  <ns2:address type="home" primary="true">
+    <ns2:street>123 Main Street</ns2:street>
+    <ns2:city>San Francisco</ns2:city>
+    <ns2:state>CA</ns2:state>
+    <ns2:zip-code>94102</ns2:zip-code>
+    <ns2:country>USA</ns2:country>
+  </ns2:address>
+  <ns2:metadata>
+    <ns2:created-at>2024-01-15T10:30:00Z</ns2:created-at>
+    <ns2:updated-at>2024-01-19T14:20:00Z</ns2:updated-at>
+    <ns2:source>web-app</ns2:source>
+    <ns2:custom-field key="department" type="string">Engineering</ns2:custom-field>
+    <ns2:custom-field key="employee-id" type="number">12345</ns2:custom-field>
+  </ns2:metadata>
+</user>

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Invalid: ns1 and ns2 have swapped URIs -->
+<user xmlns="http://example.com/schema/user" xmlns:ns1="http://example.com/schema/address" xmlns:ns2="http://example.com/schema/profile" id="user-123" version="1.0">
+  <name>John Doe</name>
+  <email>john.doe@example.com</email>
+  <ns1:profile visibility="public" verified="true">
+    <ns1:bio>Software engineer and open source enthusiast</ns1:bio>
+    <ns1:avatar-url>https://example.com/avatars/john.jpg</ns1:avatar-url>
+    <ns1:tag>developer</ns1:tag>
+    <ns1:tag>golang</ns1:tag>
+    <ns1:tag>xml</ns1:tag>
+  </ns1:profile>
+  <ns1:settings>
+    <ns1:theme>dark</ns1:theme>
+    <ns1:language>en-US</ns1:language>
+    <ns1:notification enabled="true">
+      <ns1:email>true</ns1:email>
+      <ns1:push>false</ns1:push>
+      <ns1:frequency>daily</ns1:frequency>
+    </ns1:notification>
+  </ns1:settings>
+  <ns2:address type="home" primary="true">
+    <ns2:street>123 Main Street</ns2:street>
+    <ns2:city>San Francisco</ns2:city>
+    <ns2:state>CA</ns2:state>
+    <ns2:zip-code>94102</ns2:zip-code>
+    <ns2:country>USA</ns2:country>
+  </ns2:address>
+  <ns2:metadata>
+    <ns2:created-at>2024-01-15T10:30:00Z</ns2:created-at>
+    <ns2:updated-at>2024-01-19T14:20:00Z</ns2:updated-at>
+    <ns2:source>web-app</ns2:source>
+    <ns2:custom-field key="department" type="string">Engineering</ns2:custom-field>
+    <ns2:custom-field key="employee-id" type="number">12345</ns2:custom-field>
+  </ns2:metadata>
+</user>

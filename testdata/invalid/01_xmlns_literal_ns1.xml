@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Invalid: xmlns="ns1" creates literal namespace "ns1", not the URI ns1 maps to -->
+<user xmlns="http://example.com/schema/user" xmlns:ns1="http://example.com/schema/profile" xmlns:ns2="http://example.com/schema/address" id="user-123" version="1.0">
+  <name>John Doe</name>
+  <email>john.doe@example.com</email>
+  <profile xmlns="ns1" visibility="public" verified="true">
+    <bio xmlns="ns1">Software engineer and open source enthusiast</bio>
+    <avatar-url xmlns="ns1">https://example.com/avatars/john.jpg</avatar-url>
+    <tag xmlns="ns1">developer</tag>
+    <tag xmlns="ns1">golang</tag>
+    <tag xmlns="ns1">xml</tag>
+  </profile>
+  <settings xmlns="ns1">
+    <theme xmlns="ns1">dark</theme>
+    <language xmlns="ns1">en-US</language>
+    <notification xmlns="ns1" enabled="true">
+      <email xmlns="ns1">true</email>
+      <push xmlns="ns1">false</push>
+      <frequency xmlns="ns1">daily</frequency>
+    </notification>
+  </settings>
+  <address xmlns="ns2" type="home" primary="true">
+    <street xmlns="ns2">123 Main Street</street>
+    <city xmlns="ns2">San Francisco</city>
+    <state xmlns="ns2">CA</state>
+    <zip-code xmlns="ns2">94102</zip-code>
+    <country xmlns="ns2">USA</country>
+  </address>
+  <metadata xmlns="ns2">
+    <created-at xmlns="ns2">2024-01-15T10:30:00Z</created-at>
+    <updated-at xmlns="ns2">2024-01-19T14:20:00Z</updated-at>
+    <source xmlns="ns2">web-app</source>
+    <custom-field xmlns="ns2" key="department" type="string">Engineering</custom-field>
+    <custom-field xmlns="ns2" key="employee-id" type="number">12345</custom-field>
+  </metadata>
+</user>

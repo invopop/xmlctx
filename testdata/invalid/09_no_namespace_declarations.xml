@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Invalid: No namespace declarations at all, using unprefixed elements -->
+<user id="user-123" version="1.0">
+  <name>John Doe</name>
+  <email>john.doe@example.com</email>
+  <profile visibility="public" verified="true">
+    <bio>Software engineer and open source enthusiast</bio>
+    <avatar-url>https://example.com/avatars/john.jpg</avatar-url>
+    <tag>developer</tag>
+    <tag>golang</tag>
+    <tag>xml</tag>
+  </profile>
+  <settings>
+    <theme>dark</theme>
+    <language>en-US</language>
+    <notification enabled="true">
+      <email>true</email>
+      <push>false</push>
+      <frequency>daily</frequency>
+    </notification>
+  </settings>
+  <address type="home" primary="true">
+    <street>123 Main Street</street>
+    <city>San Francisco</city>
+    <state>CA</state>
+    <zip-code>94102</zip-code>
+    <country>USA</country>
+  </address>
+  <metadata>
+    <created-at>2024-01-15T10:30:00Z</created-at>
+    <updated-at>2024-01-19T14:20:00Z</updated-at>
+    <source>web-app</source>
+    <custom-field key="department" type="string">Engineering</custom-field>
+    <custom-field key="employee-id" type="number">12345</custom-field>
+  </metadata>
+</user>

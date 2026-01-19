@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<user xmlns="http://example.com/schema/user" xmlns:ns1="http://example.com/schema/profile" xmlns:profile="http://example.com/schema/profile" xmlns:ns2="http://example.com/schema/address" id="user-123" version="1.0">
+  <name>John Doe</name>
+  <email>john.doe@example.com</email>
+  <ns1:profile visibility="public" verified="true">
+    <profile:bio>Software engineer and open source enthusiast</profile:bio>
+    <ns1:avatar-url>https://example.com/avatars/john.jpg</ns1:avatar-url>
+    <profile:tag>developer</profile:tag>
+    <profile:tag>golang</profile:tag>
+    <profile:tag>xml</profile:tag>
+  </ns1:profile>
+  <profile:settings>
+    <ns1:theme>dark</ns1:theme>
+    <profile:language>en-US</profile:language>
+    <ns1:notification enabled="true">
+      <profile:email>true</profile:email>
+      <ns1:push>false</ns1:push>
+      <profile:frequency>daily</profile:frequency>
+    </ns1:notification>
+  </profile:settings>
+  <ns2:address type="home" primary="true">
+    <ns2:street>123 Main Street</ns2:street>
+    <ns2:city>San Francisco</ns2:city>
+    <ns2:state>CA</ns2:state>
+    <ns2:zip-code>94102</ns2:zip-code>
+    <ns2:country>USA</ns2:country>
+  </ns2:address>
+  <ns2:metadata>
+    <ns2:created-at>2024-01-15T10:30:00Z</ns2:created-at>
+    <ns2:updated-at>2024-01-19T14:20:00Z</ns2:updated-at>
+    <ns2:source>web-app</ns2:source>
+    <ns2:custom-field key="department" type="string">Engineering</ns2:custom-field>
+    <ns2:custom-field key="employee-id" type="number">12345</ns2:custom-field>
+  </ns2:metadata>
+</user>

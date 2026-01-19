@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<user xmlns="http://example.com/schema/user" xmlns:x="http://example.com/schema/profile" xmlns:y="http://example.com/schema/address" id="user-123" version="1.0">
+  <name>John Doe</name>
+  <email>john.doe@example.com</email>
+  <x:profile visibility="public" verified="true">
+    <x:bio>Software engineer and open source enthusiast</x:bio>
+    <x:avatar-url>https://example.com/avatars/john.jpg</x:avatar-url>
+    <x:tag>developer</x:tag>
+    <x:tag>golang</x:tag>
+    <x:tag>xml</x:tag>
+  </x:profile>
+  <x:settings>
+    <x:theme>dark</x:theme>
+    <x:language>en-US</x:language>
+    <x:notification enabled="true">
+      <x:email>true</x:email>
+      <x:push>false</x:push>
+      <x:frequency>daily</x:frequency>
+    </x:notification>
+  </x:settings>
+  <y:address type="home" primary="true">
+    <y:street>123 Main Street</y:street>
+    <y:city>San Francisco</y:city>
+    <y:state>CA</y:state>
+    <y:zip-code>94102</y:zip-code>
+    <y:country>USA</y:country>
+  </y:address>
+  <y:metadata>
+    <y:created-at>2024-01-15T10:30:00Z</y:created-at>
+    <y:updated-at>2024-01-19T14:20:00Z</y:updated-at>
+    <y:source>web-app</y:source>
+    <y:custom-field key="department" type="string">Engineering</y:custom-field>
+    <y:custom-field key="employee-id" type="number">12345</y:custom-field>
+  </y:metadata>
+</user>

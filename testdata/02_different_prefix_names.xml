@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<user xmlns="http://example.com/schema/user" xmlns:prf="http://example.com/schema/profile" xmlns:addr="http://example.com/schema/address" id="user-123" version="1.0">
+  <name>John Doe</name>
+  <email>john.doe@example.com</email>
+  <prf:profile visibility="public" verified="true">
+    <prf:bio>Software engineer and open source enthusiast</prf:bio>
+    <prf:avatar-url>https://example.com/avatars/john.jpg</prf:avatar-url>
+    <prf:tag>developer</prf:tag>
+    <prf:tag>golang</prf:tag>
+    <prf:tag>xml</prf:tag>
+  </prf:profile>
+  <prf:settings>
+    <prf:theme>dark</prf:theme>
+    <prf:language>en-US</prf:language>
+    <prf:notification enabled="true">
+      <prf:email>true</prf:email>
+      <prf:push>false</prf:push>
+      <prf:frequency>daily</prf:frequency>
+    </prf:notification>
+  </prf:settings>
+  <addr:address type="home" primary="true">
+    <addr:street>123 Main Street</addr:street>
+    <addr:city>San Francisco</addr:city>
+    <addr:state>CA</addr:state>
+    <addr:zip-code>94102</addr:zip-code>
+    <addr:country>USA</addr:country>
+  </addr:address>
+  <addr:metadata>
+    <addr:created-at>2024-01-15T10:30:00Z</addr:created-at>
+    <addr:updated-at>2024-01-19T14:20:00Z</addr:updated-at>
+    <addr:source>web-app</addr:source>
+    <addr:custom-field key="department" type="string">Engineering</addr:custom-field>
+    <addr:custom-field key="employee-id" type="number">12345</addr:custom-field>
+  </addr:metadata>
+</user>
