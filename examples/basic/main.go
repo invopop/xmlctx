@@ -24,8 +24,8 @@ func main() {
 		XmlnsA  string   `xml:"xmlns:addr,attr"`
 		Name    string   `xml:"name"`
 		Email   string   `xml:"email"`
-		City    string   `xml:"addr:city"`
-		Country string   `xml:"addr:country"`
+		City    *string  `xml:"addr:city"`
+		Country *string  `xml:"addr:country"`
 	}
 
 	var person Person
@@ -41,6 +41,6 @@ func main() {
 
 	fmt.Printf("Name: %s\n", person.Name)
 	fmt.Printf("Email: %s\n", person.Email)
-	fmt.Printf("City: %s\n", person.City)
-	fmt.Printf("Country: %s\n", person.Country)
+	fmt.Printf("City: %s\n", *person.City)
+	fmt.Printf("Country: %s\n", *person.Country)
 }

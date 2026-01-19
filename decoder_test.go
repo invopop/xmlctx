@@ -16,6 +16,10 @@ const (
 	NS2URL    = "http://example.com/schema/address"
 )
 
+// Helper functions to create pointers
+func strPtr(s string) *string { return &s }
+func boolPtr(b bool) *bool    { return &b }
+
 // User represents the root structure with multiple namespaces
 type User struct {
 	XMLName xml.Name `xml:"user"`
@@ -72,8 +76,8 @@ type NotificationSettings struct {
 // Address represents address information in ns2:namespace
 type Address struct {
 	// Attributes
-	Type    string `xml:"type,attr"`
-	Primary bool   `xml:"primary,attr"`
+	Type    *string `xml:"type,attr"`
+	Primary *bool   `xml:"primary,attr"`
 
 	// Fields
 	Street  string `xml:"ns2:street"`
@@ -136,8 +140,8 @@ func TestMarshalUser(t *testing.T) {
 
 		// ns2: Address
 		Address: &Address{
-			Type:    "home",
-			Primary: true,
+			Type:    strPtr("home"),
+			Primary: boolPtr(true),
 			Street:  "123 Main Street",
 			City:    "San Francisco",
 			State:   "CA",
@@ -215,8 +219,10 @@ func TestMarshalUser(t *testing.T) {
 	if unmarshaledUser.Address.City != user.Address.City {
 		t.Errorf("Address.City mismatch: got %s, want %s", unmarshaledUser.Address.City, user.Address.City)
 	}
-	if unmarshaledUser.Address.Primary != user.Address.Primary {
-		t.Errorf("Address.Primary mismatch: got %v, want %v", unmarshaledUser.Address.Primary, user.Address.Primary)
+	if (unmarshaledUser.Address.Primary == nil) != (user.Address.Primary == nil) {
+		t.Errorf("Address.Primary nil mismatch: got %v, want %v", unmarshaledUser.Address.Primary, user.Address.Primary)
+	} else if unmarshaledUser.Address.Primary != nil && *unmarshaledUser.Address.Primary != *user.Address.Primary {
+		t.Errorf("Address.Primary mismatch: got %v, want %v", *unmarshaledUser.Address.Primary, *user.Address.Primary)
 	}
 	if unmarshaledUser.Metadata.Source != user.Metadata.Source {
 		t.Errorf("Metadata.Source mismatch: got %s, want %s", unmarshaledUser.Metadata.Source, user.Metadata.Source)
@@ -277,11 +283,11 @@ func verifyUser(t *testing.T, u User) {
 	if u.Settings.Notification.Frequency != "daily" {
 		t.Errorf("Notification.Frequency: got %s, want daily", u.Settings.Notification.Frequency)
 	}
-	if u.Address.Type != "home" {
-		t.Errorf("Address.Type: got %s, want home", u.Address.Type)
+	if u.Address.Type == nil || *u.Address.Type != "home" {
+		t.Errorf("Address.Type: got %v, want home", u.Address.Type)
 	}
-	if !u.Address.Primary {
-		t.Error("Address.Primary: got false, want true")
+	if u.Address.Primary == nil || !*u.Address.Primary {
+		t.Error("Address.Primary: got false or nil, want true")
 	}
 	if u.Address.Street != "123 Main Street" {
 		t.Errorf("Address.Street: got %s, want 123 Main Street", u.Address.Street)

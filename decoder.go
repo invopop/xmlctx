@@ -341,6 +341,14 @@ func (d *Decoder) matchesAttribute(tag string, attr xml.Attr) bool {
 
 // setFieldValue sets a field value from a string
 func (d *Decoder) setFieldValue(v reflect.Value, s string) error {
+	// Handle pointer types
+	if v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			v.Set(reflect.New(v.Type().Elem()))
+		}
+		return d.setFieldValue(v.Elem(), s)
+	}
+
 	switch v.Kind() {
 	case reflect.String:
 		v.SetString(s)
