@@ -74,7 +74,7 @@ xmlctx.Parse(data, &user, xmlctx.WithNamespaces(map[string]string{
 - Nested namespace declarations
 - Multiple prefixes for the same namespace
 - Namespaced attributes
-- String, bool, integer (int, int8-64, uint, uint8-64), and slice types
+- String, bool, integer (int, int8-64, uint, uint8-64), pointer, and slice types
 - Character data (`,chardata` tag)
 
 ## Examples

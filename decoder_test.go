@@ -38,7 +38,7 @@ type User struct {
 	Settings Settings `xml:"ns1:settings"`
 
 	// ns2:namespace fields
-	Address  Address  `xml:"ns2:address"`
+	Address  *Address `xml:"ns2:address"`
 	Metadata Metadata `xml:"ns2:metadata"`
 }
 
@@ -135,7 +135,7 @@ func TestMarshalUser(t *testing.T) {
 		},
 
 		// ns2: Address
-		Address: Address{
+		Address: &Address{
 			Type:    "home",
 			Primary: true,
 			Street:  "123 Main Street",

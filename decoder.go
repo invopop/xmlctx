@@ -101,6 +101,13 @@ func (d *Decoder) decodeElement(v reflect.Value, start xml.StartElement) error {
 	// start.Name.Local contains the local name without prefix
 
 	switch v.Kind() {
+	case reflect.Pointer:
+		// Initialize pointer if nil
+		if v.IsNil() {
+			v.Set(reflect.New(v.Type().Elem()))
+		}
+		// Decode into the element the pointer points to
+		return d.decodeElement(v.Elem(), start)
 	case reflect.Struct:
 		return d.decodeStruct(v, start)
 	case reflect.String:
