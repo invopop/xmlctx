@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -65,16 +66,16 @@ func NewDecoder(r io.Reader, opts ...Option) *Decoder {
 }
 
 // Parse decodes XML with namespace context awareness
-func Parse(data []byte, v interface{}, opts ...Option) error {
+func Parse(data []byte, v any, opts ...Option) error {
 	r := strings.NewReader(string(data))
 	dec := NewDecoder(r, opts...)
 	return dec.Decode(v)
 }
 
 // Decode decodes the XML into the provided value
-func (d *Decoder) Decode(v interface{}) error {
+func (d *Decoder) Decode(v any) error {
 	rv := reflect.ValueOf(v)
-	if rv.Kind() != reflect.Ptr || rv.IsNil() {
+	if rv.Kind() != reflect.Pointer || rv.IsNil() {
 		return fmt.Errorf("decode target must be a non-nil pointer")
 	}
 
@@ -339,8 +340,17 @@ func (d *Decoder) setFieldValue(v reflect.Value, s string) error {
 	case reflect.Bool:
 		v.SetBool(s == "true")
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		// Handle integers if needed
-		return fmt.Errorf("integer parsing not yet implemented")
+		i, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return fmt.Errorf("failed to parse integer: %w", err)
+		}
+		v.SetInt(i)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		i, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			return fmt.Errorf("failed to parse unsigned integer: %w", err)
+		}
+		v.SetUint(i)
 	default:
 		return fmt.Errorf("unsupported field type: %v", v.Kind())
 	}
@@ -349,7 +359,7 @@ func (d *Decoder) setFieldValue(v reflect.Value, s string) error {
 
 // decodeString decodes character data into a string field
 func (d *Decoder) decodeString(v reflect.Value) error {
-	var s string
+	var s strings.Builder
 	for {
 		tok, err := d.decoder.Token()
 		if err == io.EOF {
@@ -361,9 +371,9 @@ func (d *Decoder) decodeString(v reflect.Value) error {
 
 		switch t := tok.(type) {
 		case xml.CharData:
-			s += string(t)
+			s.Write(t)
 		case xml.EndElement:
-			v.SetString(strings.TrimSpace(s))
+			v.SetString(strings.TrimSpace(s.String()))
 			return nil
 		}
 	}
@@ -372,7 +382,7 @@ func (d *Decoder) decodeString(v reflect.Value) error {
 
 // decodeBool decodes character data into a bool field
 func (d *Decoder) decodeBool(v reflect.Value) error {
-	var s string
+	var s strings.Builder
 	for {
 		tok, err := d.decoder.Token()
 		if err == io.EOF {
@@ -384,10 +394,10 @@ func (d *Decoder) decodeBool(v reflect.Value) error {
 
 		switch t := tok.(type) {
 		case xml.CharData:
-			s += string(t)
+			s.Write(t)
 		case xml.EndElement:
-			s = strings.TrimSpace(s)
-			v.SetBool(s == "true")
+			str := strings.TrimSpace(s.String())
+			v.SetBool(str == "true")
 			return nil
 		}
 	}
