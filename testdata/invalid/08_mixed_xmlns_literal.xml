@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Invalid: Mixes correct prefixes with xmlns="ns1" literal namespace -->
+<user xmlns="http://example.com/schema/user" xmlns:ns1="http://example.com/schema/profile" xmlns:ns2="http://example.com/schema/address" id="user-123" version="1.0">
+  <name>John Doe</name>
+  <email>john.doe@example.com</email>
+  <ns1:profile visibility="public" verified="true">
+    <ns1:bio>Software engineer and open source enthusiast</ns1:bio>
+    <ns1:avatar-url>https://example.com/avatars/john.jpg</ns1:avatar-url>
+    <ns1:tag>developer</ns1:tag>
+    <ns1:tag>golang</ns1:tag>
+    <ns1:tag>xml</ns1:tag>
+  </ns1:profile>
+  <settings xmlns="ns1">
+    <theme xmlns="ns1">dark</theme>
+    <language xmlns="ns1">en-US</language>
+    <notification xmlns="ns1" enabled="true">
+      <email xmlns="ns1">true</email>
+      <push xmlns="ns1">false</push>
+      <frequency xmlns="ns1">daily</frequency>
+    </notification>
+  </settings>
+  <ns2:address type="home" primary="true">
+    <ns2:street>123 Main Street</ns2:street>
+    <ns2:city>San Francisco</ns2:city>
+    <ns2:state>CA</ns2:state>
+    <ns2:zip-code>94102</ns2:zip-code>
+    <ns2:country>USA</ns2:country>
+  </ns2:address>
+  <metadata xmlns="ns2">
+    <created-at xmlns="ns2">2024-01-15T10:30:00Z</created-at>
+    <updated-at xmlns="ns2">2024-01-19T14:20:00Z</updated-at>
+    <source xmlns="ns2">web-app</source>
+    <custom-field xmlns="ns2" key="department" type="string">Engineering</custom-field>
+    <custom-field xmlns="ns2" key="employee-id" type="number">12345</custom-field>
+  </metadata>
+</user>

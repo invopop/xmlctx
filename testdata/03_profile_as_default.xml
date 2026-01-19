@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<usr:user xmlns:usr="http://example.com/schema/user" xmlns="http://example.com/schema/profile" xmlns:addr="http://example.com/schema/address" id="user-123" version="1.0">
+  <usr:name>John Doe</usr:name>
+  <usr:email>john.doe@example.com</usr:email>
+  <profile visibility="public" verified="true">
+    <bio>Software engineer and open source enthusiast</bio>
+    <avatar-url>https://example.com/avatars/john.jpg</avatar-url>
+    <tag>developer</tag>
+    <tag>golang</tag>
+    <tag>xml</tag>
+  </profile>
+  <settings>
+    <theme>dark</theme>
+    <language>en-US</language>
+    <notification enabled="true">
+      <email>true</email>
+      <push>false</push>
+      <frequency>daily</frequency>
+    </notification>
+  </settings>
+  <addr:address type="home" primary="true">
+    <addr:street>123 Main Street</addr:street>
+    <addr:city>San Francisco</addr:city>
+    <addr:state>CA</addr:state>
+    <addr:zip-code>94102</addr:zip-code>
+    <addr:country>USA</addr:country>
+  </addr:address>
+  <addr:metadata>
+    <addr:created-at>2024-01-15T10:30:00Z</addr:created-at>
+    <addr:updated-at>2024-01-19T14:20:00Z</addr:updated-at>
+    <addr:source>web-app</addr:source>
+    <addr:custom-field key="department" type="string">Engineering</addr:custom-field>
+    <addr:custom-field key="employee-id" type="number">12345</addr:custom-field>
+  </addr:metadata>
+</usr:user>

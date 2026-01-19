@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<user xmlns="http://example.com/schema/user" id="user-123" version="1.0">
+  <name>John Doe</name>
+  <email>john.doe@example.com</email>
+  <p:profile xmlns:p="http://example.com/schema/profile" visibility="public" verified="true">
+    <p:bio>Software engineer and open source enthusiast</p:bio>
+    <p:avatar-url xmlns:p="http://example.com/schema/profile">https://example.com/avatars/john.jpg</p:avatar-url>
+    <p:tag>developer</p:tag>
+    <p:tag>golang</p:tag>
+    <p:tag>xml</p:tag>
+  </p:profile>
+  <s:settings xmlns:s="http://example.com/schema/profile">
+    <s:theme xmlns:s="http://example.com/schema/profile">dark</s:theme>
+    <s:language>en-US</s:language>
+    <s:notification enabled="true">
+      <s:email>true</s:email>
+      <s:push>false</s:push>
+      <s:frequency>daily</s:frequency>
+    </s:notification>
+  </s:settings>
+  <a:address xmlns:a="http://example.com/schema/address" type="home" primary="true">
+    <a:street xmlns:a="http://example.com/schema/address">123 Main Street</a:street>
+    <a:city>San Francisco</a:city>
+    <a:state>CA</a:state>
+    <a:zip-code>94102</a:zip-code>
+    <a:country>USA</a:country>
+  </a:address>
+  <m:metadata xmlns:m="http://example.com/schema/address">
+    <m:created-at>2024-01-15T10:30:00Z</m:created-at>
+    <m:updated-at>2024-01-19T14:20:00Z</m:updated-at>
+    <m:source>web-app</m:source>
+    <m:custom-field key="department" type="string">Engineering</m:custom-field>
+    <m:custom-field key="employee-id" type="number">12345</m:custom-field>
+  </m:metadata>
+</user>
