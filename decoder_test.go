@@ -408,7 +408,7 @@ func TestInvalidNamespaces(t *testing.T) {
 				if user.Profile.Bio != "" {
 					t.Errorf("Expected Profile.Bio empty, got: %s", user.Profile.Bio)
 				}
-				if user.Address.City != "" {
+				if user.Address != nil && user.Address.City != "" {
 					t.Errorf("Expected Address.City empty, got: %s", user.Address.City)
 				}
 			},
@@ -420,7 +420,7 @@ func TestInvalidNamespaces(t *testing.T) {
 				if user.Profile.Bio != "" {
 					t.Errorf("Expected Profile.Bio empty, got: %s", user.Profile.Bio)
 				}
-				if user.Address.City != "" {
+				if user.Address != nil && user.Address.City != "" {
 					t.Errorf("Expected Address.City empty, got: %s", user.Address.City)
 				}
 			},
