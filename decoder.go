@@ -116,6 +116,10 @@ func (d *Decoder) decodeElement(decoder *xml.Decoder, v reflect.Value, start xml
 		return d.decodeString(decoder, v)
 	case reflect.Bool:
 		return d.decodeBool(decoder, v)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return d.decodeInt(decoder, v)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return d.decodeUint(decoder, v)
 	case reflect.Slice:
 		// For slices, create a new element and decode into it
 		elemType := v.Type().Elem()
@@ -415,6 +419,62 @@ func (d *Decoder) decodeBool(decoder *xml.Decoder, v reflect.Value) error {
 		case xml.EndElement:
 			str := strings.TrimSpace(s.String())
 			v.SetBool(str == "true")
+			return nil
+		}
+	}
+	return nil
+}
+
+// decodeInt decodes character data into an int field
+func (d *Decoder) decodeInt(decoder *xml.Decoder, v reflect.Value) error {
+	var s strings.Builder
+	for {
+		tok, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		switch t := tok.(type) {
+		case xml.CharData:
+			s.Write(t)
+		case xml.EndElement:
+			str := strings.TrimSpace(s.String())
+			i, err := strconv.ParseInt(str, 10, 64)
+			if err != nil {
+				return fmt.Errorf("failed to parse integer: %w", err)
+			}
+			v.SetInt(i)
+			return nil
+		}
+	}
+	return nil
+}
+
+// decodeUint decodes character data into a uint field
+func (d *Decoder) decodeUint(decoder *xml.Decoder, v reflect.Value) error {
+	var s strings.Builder
+	for {
+		tok, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		switch t := tok.(type) {
+		case xml.CharData:
+			s.Write(t)
+		case xml.EndElement:
+			str := strings.TrimSpace(s.String())
+			i, err := strconv.ParseUint(str, 10, 64)
+			if err != nil {
+				return fmt.Errorf("failed to parse unsigned integer: %w", err)
+			}
+			v.SetUint(i)
 			return nil
 		}
 	}

@@ -350,6 +350,7 @@ func TestUnmarshalAllVariations(t *testing.T) {
 		"testdata/14_no_root_declarations.xml",
 		"testdata/15_namespaced_attributes.xml",
 		"testdata/16_overlapping_scopes.xml",
+		"testdata/17_unknown_elements_skipped.xml",
 	}
 
 	for _, file := range testFiles {
@@ -894,5 +895,916 @@ func TestMatchesFieldWithoutNamespace(t *testing.T) {
 
 	if test.Value != "hello" {
 		t.Errorf("Value: got %s, want hello", test.Value)
+	}
+}
+
+// TestSkipUnknownElements tests that unknown elements are skipped (continue case)
+func TestSkipUnknownElements(t *testing.T) {
+	type SimpleStruct struct {
+		XMLName xml.Name `xml:"root"`
+		Name    string   `xml:"name"`
+		Email   string   `xml:"email"`
+	}
+
+	// XML with unknown elements interspersed
+	xmlData := []byte(`<root>
+		<unknown1>This should be skipped</unknown1>
+		<name>John Doe</name>
+		<unknown2>Also skipped</unknown2>
+		<email>john@example.com</email>
+		<unknown3>Skipped too</unknown3>
+	</root>`)
+
+	var s SimpleStruct
+	err := xmlctx.Unmarshal(xmlData, &s, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if s.Name != "John Doe" {
+		t.Errorf("Name: got %s, want John Doe", s.Name)
+	}
+	if s.Email != "john@example.com" {
+		t.Errorf("Email: got %s, want john@example.com", s.Email)
+	}
+}
+
+// TestSkipNestedUnknownElements tests that nested unknown elements are properly skipped
+func TestSkipNestedUnknownElements(t *testing.T) {
+	type SimpleStruct struct {
+		XMLName xml.Name `xml:"root"`
+		Name    string   `xml:"name"`
+		Value   string   `xml:"value"`
+	}
+
+	// XML with nested unknown elements
+	xmlData := []byte(`<root>
+		<name>Test</name>
+		<unknown>
+			<nested>
+				<deeply>
+					<nested>content</nested>
+				</deeply>
+			</nested>
+		</unknown>
+		<value>Result</value>
+	</root>`)
+
+	var s SimpleStruct
+	err := xmlctx.Unmarshal(xmlData, &s, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if s.Name != "Test" {
+		t.Errorf("Name: got %s, want Test", s.Name)
+	}
+	if s.Value != "Result" {
+		t.Errorf("Value: got %s, want Result", s.Value)
+	}
+}
+
+// TestSkipUnknownNamespacedElements tests skipping elements in unknown namespaces
+func TestSkipUnknownNamespacedElements(t *testing.T) {
+	type SimpleStruct struct {
+		XMLName xml.Name `xml:"root"`
+		Name    string   `xml:"ns1:name"`
+		Email   string   `xml:"ns1:email"`
+	}
+
+	// XML with elements in unknown namespaces
+	xmlData := []byte(`<root xmlns:ns1="http://example.com/ns1" xmlns:ns2="http://example.com/ns2">
+		<ns2:unknown>Should be skipped</ns2:unknown>
+		<ns1:name>John</ns1:name>
+		<ns2:other>Also skipped</ns2:other>
+		<ns1:email>john@example.com</ns1:email>
+		<ns3:bad>Undeclared namespace</ns3:bad>
+	</root>`)
+
+	var s SimpleStruct
+	err := xmlctx.Unmarshal(xmlData, &s,
+		xmlctx.WithNamespaces(map[string]string{
+			"ns1": "http://example.com/ns1",
+		}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if s.Name != "John" {
+		t.Errorf("Name: got %s, want John", s.Name)
+	}
+	if s.Email != "john@example.com" {
+		t.Errorf("Email: got %s, want john@example.com", s.Email)
+	}
+}
+
+// TestSkipUnknownElementsInComplexStruct tests continue case with the main User struct
+func TestSkipUnknownElementsInComplexStruct(t *testing.T) {
+	xmlData := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<user xmlns="http://example.com/schema/user"
+      xmlns:ns1="http://example.com/schema/profile"
+      xmlns:ns2="http://example.com/schema/address"
+      id="user-123" version="1.0">
+  <unknown-field>Should be ignored</unknown-field>
+  <name>John Doe</name>
+  <extra>Also ignored</extra>
+  <email>john.doe@example.com</email>
+  <ns1:profile visibility="public" verified="true">
+    <ns1:unknown>Ignored in profile</ns1:unknown>
+    <ns1:bio>Software engineer</ns1:bio>
+    <ns1:avatar-url>https://example.com/avatars/john.jpg</ns1:avatar-url>
+  </ns1:profile>
+  <random-element>
+    <with>
+      <nested>data</nested>
+    </with>
+  </random-element>
+  <ns2:address type="home" primary="true">
+    <ns2:street>123 Main Street</ns2:street>
+    <ns2:unknown-field>Skipped</ns2:unknown-field>
+    <ns2:city>San Francisco</ns2:city>
+  </ns2:address>
+</user>`)
+
+	var user User
+	err := xmlctx.Unmarshal(xmlData, &user,
+		xmlctx.WithNamespaces(map[string]string{
+			"":    DefaultNS,
+			"ns1": NS1URL,
+			"ns2": NS2URL,
+		}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	// Verify known fields were parsed correctly
+	if user.ID != "user-123" {
+		t.Errorf("ID: got %s, want user-123", user.ID)
+	}
+	if user.Name != "John Doe" {
+		t.Errorf("Name: got %s, want John Doe", user.Name)
+	}
+	if user.Email != "john.doe@example.com" {
+		t.Errorf("Email: got %s, want john.doe@example.com", user.Email)
+	}
+	if user.Profile.Bio != "Software engineer" {
+		t.Errorf("Profile.Bio: got %s, want Software engineer", user.Profile.Bio)
+	}
+	if user.Address.City != "San Francisco" {
+		t.Errorf("Address.City: got %s, want San Francisco", user.Address.City)
+	}
+}
+
+// TestSkipUnknownElementsWithAttributes tests that unknown elements with attributes are skipped
+func TestSkipUnknownElementsWithAttributes(t *testing.T) {
+	type SimpleStruct struct {
+		XMLName xml.Name `xml:"root"`
+		Value   string   `xml:"value"`
+	}
+
+	xmlData := []byte(`<root>
+		<unknown attr1="val1" attr2="val2">
+			<nested>Complex content</nested>
+		</unknown>
+		<value>Result</value>
+	</root>`)
+
+	var s SimpleStruct
+	err := xmlctx.Unmarshal(xmlData, &s, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if s.Value != "Result" {
+		t.Errorf("Value: got %s, want Result", s.Value)
+	}
+}
+
+// TestMixedKnownUnknownElements tests XML with known and unknown elements mixed
+func TestMixedKnownUnknownElements(t *testing.T) {
+	type Product struct {
+		XMLName xml.Name `xml:"product"`
+		Name    string   `xml:"name"`
+		Price   string   `xml:"price"`
+		Stock   int      `xml:"stock"`
+	}
+
+	xmlData := []byte(`<product>
+		<internal-id>12345</internal-id>
+		<name>Widget</name>
+		<supplier>ACME Corp</supplier>
+		<price>19.99</price>
+		<warehouse-location>A-5</warehouse-location>
+		<stock>100</stock>
+		<last-updated>2024-01-15</last-updated>
+	</product>`)
+
+	var p Product
+	err := xmlctx.Unmarshal(xmlData, &p, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if p.Name != "Widget" {
+		t.Errorf("Name: got %s, want Widget", p.Name)
+	}
+	if p.Price != "19.99" {
+		t.Errorf("Price: got %s, want 19.99", p.Price)
+	}
+	if p.Stock != 100 {
+		t.Errorf("Stock: got %d, want 100", p.Stock)
+	}
+}
+
+// TestIntegerElements tests integer types in element content (not attributes)
+func TestIntegerElements(t *testing.T) {
+	type Numbers struct {
+		XMLName xml.Name `xml:"numbers"`
+		I       int      `xml:"i"`
+		I8      int8     `xml:"i8"`
+		I16     int16    `xml:"i16"`
+		I32     int32    `xml:"i32"`
+		I64     int64    `xml:"i64"`
+		U       uint     `xml:"u"`
+		U8      uint8    `xml:"u8"`
+		U16     uint16   `xml:"u16"`
+		U32     uint32   `xml:"u32"`
+		U64     uint64   `xml:"u64"`
+	}
+
+	xmlData := []byte(`<numbers>
+		<i>42</i>
+		<i8>127</i8>
+		<i16>32767</i16>
+		<i32>2147483647</i32>
+		<i64>9223372036854775807</i64>
+		<u>42</u>
+		<u8>255</u8>
+		<u16>65535</u16>
+		<u32>4294967295</u32>
+		<u64>18446744073709551615</u64>
+	</numbers>`)
+
+	var nums Numbers
+	err := xmlctx.Unmarshal(xmlData, &nums, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if nums.I != 42 {
+		t.Errorf("I: got %d, want 42", nums.I)
+	}
+	if nums.I8 != 127 {
+		t.Errorf("I8: got %d, want 127", nums.I8)
+	}
+	if nums.I16 != 32767 {
+		t.Errorf("I16: got %d, want 32767", nums.I16)
+	}
+	if nums.I32 != 2147483647 {
+		t.Errorf("I32: got %d, want 2147483647", nums.I32)
+	}
+	if nums.I64 != 9223372036854775807 {
+		t.Errorf("I64: got %d, want 9223372036854775807", nums.I64)
+	}
+	if nums.U != 42 {
+		t.Errorf("U: got %d, want 42", nums.U)
+	}
+	if nums.U8 != 255 {
+		t.Errorf("U8: got %d, want 255", nums.U8)
+	}
+	if nums.U16 != 65535 {
+		t.Errorf("U16: got %d, want 65535", nums.U16)
+	}
+	if nums.U32 != 4294967295 {
+		t.Errorf("U32: got %d, want 4294967295", nums.U32)
+	}
+	if nums.U64 != 18446744073709551615 {
+		t.Errorf("U64: got %d, want 18446744073709551615", nums.U64)
+	}
+}
+
+// TestIntegerElementPointers tests integer pointer types in element content
+func TestIntegerElementPointers(t *testing.T) {
+	type Numbers struct {
+		XMLName xml.Name `xml:"numbers"`
+		I       *int     `xml:"i"`
+		I8      *int8    `xml:"i8"`
+		I16     *int16   `xml:"i16"`
+		I32     *int32   `xml:"i32"`
+		I64     *int64   `xml:"i64"`
+		U       *uint    `xml:"u"`
+		U8      *uint8   `xml:"u8"`
+		U16     *uint16  `xml:"u16"`
+		U32     *uint32  `xml:"u32"`
+		U64     *uint64  `xml:"u64"`
+	}
+
+	xmlData := []byte(`<numbers>
+		<i>100</i>
+		<i8>10</i8>
+		<i16>1000</i16>
+		<i32>100000</i32>
+		<i64>10000000</i64>
+		<u>200</u>
+		<u8>20</u8>
+		<u16>2000</u16>
+		<u32>200000</u32>
+		<u64>20000000</u64>
+	</numbers>`)
+
+	var nums Numbers
+	err := xmlctx.Unmarshal(xmlData, &nums, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if nums.I == nil || *nums.I != 100 {
+		t.Errorf("I: got %v, want 100", nums.I)
+	}
+	if nums.I8 == nil || *nums.I8 != 10 {
+		t.Errorf("I8: got %v, want 10", nums.I8)
+	}
+	if nums.I16 == nil || *nums.I16 != 1000 {
+		t.Errorf("I16: got %v, want 1000", nums.I16)
+	}
+	if nums.I32 == nil || *nums.I32 != 100000 {
+		t.Errorf("I32: got %v, want 100000", nums.I32)
+	}
+	if nums.I64 == nil || *nums.I64 != 10000000 {
+		t.Errorf("I64: got %v, want 10000000", nums.I64)
+	}
+	if nums.U == nil || *nums.U != 200 {
+		t.Errorf("U: got %v, want 200", nums.U)
+	}
+	if nums.U8 == nil || *nums.U8 != 20 {
+		t.Errorf("U8: got %v, want 20", nums.U8)
+	}
+	if nums.U16 == nil || *nums.U16 != 2000 {
+		t.Errorf("U16: got %v, want 2000", nums.U16)
+	}
+	if nums.U32 == nil || *nums.U32 != 200000 {
+		t.Errorf("U32: got %v, want 200000", nums.U32)
+	}
+	if nums.U64 == nil || *nums.U64 != 20000000 {
+		t.Errorf("U64: got %v, want 20000000", nums.U64)
+	}
+}
+
+// TestInvalidIntegerElement tests error handling for invalid integer values in elements
+func TestInvalidIntegerElement(t *testing.T) {
+	type IntTest struct {
+		XMLName xml.Name `xml:"test"`
+		Value   int      `xml:"value"`
+	}
+
+	xmlData := []byte(`<test><value>not-a-number</value></test>`)
+	var test IntTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err == nil {
+		t.Error("Expected error for invalid integer element, got nil")
+	}
+}
+
+// TestInvalidUintElement tests error handling for invalid uint values in elements
+func TestInvalidUintElement(t *testing.T) {
+	type UintTest struct {
+		XMLName xml.Name `xml:"test"`
+		Value   uint     `xml:"value"`
+	}
+
+	xmlData := []byte(`<test><value>not-a-number</value></test>`)
+	var test UintTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err == nil {
+		t.Error("Expected error for invalid uint element, got nil")
+	}
+}
+
+// TestNegativeUintElement tests error handling for negative values in uint elements
+func TestNegativeUintElement(t *testing.T) {
+	type UintTest struct {
+		XMLName xml.Name `xml:"test"`
+		Value   uint     `xml:"value"`
+	}
+
+	xmlData := []byte(`<test><value>-100</value></test>`)
+	var test UintTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err == nil {
+		t.Error("Expected error for negative uint element, got nil")
+	}
+}
+
+// TestEmptyStringElement tests decoding empty string elements
+func TestEmptyStringElement(t *testing.T) {
+	type EmptyTest struct {
+		XMLName xml.Name `xml:"test"`
+		Value   string   `xml:"value"`
+		Empty   string   `xml:"empty"`
+	}
+
+	xmlData := []byte(`<test><value>has content</value><empty></empty></test>`)
+	var test EmptyTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if test.Value != "has content" {
+		t.Errorf("Value: got %s, want 'has content'", test.Value)
+	}
+	if test.Empty != "" {
+		t.Errorf("Empty: got %s, want empty string", test.Empty)
+	}
+}
+
+// TestEmptyIntegerElement tests decoding empty integer elements (should error)
+func TestEmptyIntegerElement(t *testing.T) {
+	type EmptyIntTest struct {
+		XMLName xml.Name `xml:"test"`
+		Value   int      `xml:"value"`
+	}
+
+	xmlData := []byte(`<test><value></value></test>`)
+	var test EmptyIntTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err == nil {
+		t.Error("Expected error for empty integer element, got nil")
+	}
+}
+
+// TestEmptyBoolElement tests decoding empty bool elements
+func TestEmptyBoolElement(t *testing.T) {
+	type EmptyBoolTest struct {
+		XMLName xml.Name `xml:"test"`
+		Value   bool     `xml:"value"`
+	}
+
+	xmlData := []byte(`<test><value></value></test>`)
+	var test EmptyBoolTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	// Empty bool should be false
+	if test.Value {
+		t.Error("Empty bool should be false")
+	}
+}
+
+// TestWhitespaceOnlyElements tests elements with only whitespace
+func TestWhitespaceOnlyElements(t *testing.T) {
+	type WhitespaceTest struct {
+		XMLName xml.Name `xml:"test"`
+		Str     string   `xml:"str"`
+		Num     int      `xml:"num"`
+	}
+
+	xmlData := []byte(`<test><str>   </str><num>  42  </num></test>`)
+	var test WhitespaceTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	// Whitespace should be trimmed
+	if test.Str != "" {
+		t.Errorf("Str: got '%s', want empty string", test.Str)
+	}
+	if test.Num != 42 {
+		t.Errorf("Num: got %d, want 42", test.Num)
+	}
+}
+
+// TestIntegerOverflow tests integer overflow detection
+func TestIntegerOverflow(t *testing.T) {
+	type IntOverflowTest struct {
+		XMLName xml.Name `xml:"test"`
+		Value   int8     `xml:"value"`
+	}
+
+	xmlData := []byte(`<test><value>999999</value></test>`)
+	var test IntOverflowTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	// Should succeed but value will overflow - Go's SetInt will handle the overflow
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+}
+
+// TestSliceOfIntegers tests decoding slices of integers
+func TestSliceOfIntegers(t *testing.T) {
+	type IntSliceTest struct {
+		XMLName xml.Name `xml:"test"`
+		Values  []int    `xml:"value"`
+	}
+
+	xmlData := []byte(`<test><value>1</value><value>2</value><value>3</value></test>`)
+	var test IntSliceTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if len(test.Values) != 3 {
+		t.Errorf("Values length: got %d, want 3", len(test.Values))
+	}
+	if test.Values[0] != 1 || test.Values[1] != 2 || test.Values[2] != 3 {
+		t.Errorf("Values: got %v, want [1 2 3]", test.Values)
+	}
+}
+
+// TestSliceOfBools tests decoding slices of bools
+func TestSliceOfBools(t *testing.T) {
+	type BoolSliceTest struct {
+		XMLName xml.Name `xml:"test"`
+		Flags   []bool   `xml:"flag"`
+	}
+
+	xmlData := []byte(`<test><flag>true</flag><flag>false</flag><flag>true</flag></test>`)
+	var test BoolSliceTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if len(test.Flags) != 3 {
+		t.Errorf("Flags length: got %d, want 3", len(test.Flags))
+	}
+	if !test.Flags[0] || test.Flags[1] || !test.Flags[2] {
+		t.Errorf("Flags: got %v, want [true false true]", test.Flags)
+	}
+}
+
+// TestNestedStructPointers tests nested struct with pointers
+func TestNestedStructPointers(t *testing.T) {
+	type Inner struct {
+		Value string `xml:"value"`
+	}
+	type Outer struct {
+		XMLName xml.Name `xml:"outer"`
+		Inner   *Inner   `xml:"inner"`
+	}
+
+	xmlData := []byte(`<outer><inner><value>test</value></inner></outer>`)
+	var outer Outer
+	err := xmlctx.Unmarshal(xmlData, &outer, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if outer.Inner == nil {
+		t.Fatal("Inner should not be nil")
+	}
+	if outer.Inner.Value != "test" {
+		t.Errorf("Inner.Value: got %s, want test", outer.Inner.Value)
+	}
+}
+
+// TestCharDataWithMixedContent tests chardata with mixed content
+func TestCharDataWithMixedContent(t *testing.T) {
+	type MixedContent struct {
+		XMLName xml.Name `xml:"para"`
+		Text    string   `xml:",chardata"`
+		Bold    string   `xml:"bold"`
+	}
+
+	xmlData := []byte(`<para>This is <bold>bold</bold> text</para>`)
+	var para MixedContent
+	err := xmlctx.Unmarshal(xmlData, &para, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if para.Bold != "bold" {
+		t.Errorf("Bold: got %s, want bold", para.Bold)
+	}
+	// Chardata should accumulate text outside of child elements
+	if para.Text == "" {
+		t.Error("Text should not be empty")
+	}
+}
+
+// TestStructWithoutCharDataField tests struct without chardata field but with text content
+func TestStructWithoutCharDataField(t *testing.T) {
+	type NoCharData struct {
+		XMLName xml.Name `xml:"test"`
+		Value   string   `xml:"value"`
+	}
+
+	// XML has text content but struct has no chardata field
+	xmlData := []byte(`<test>Some text<value>data</value>More text</test>`)
+	var test NoCharData
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if test.Value != "data" {
+		t.Errorf("Value: got %s, want data", test.Value)
+	}
+}
+
+// TestCharDataFieldEmpty tests chardata field with empty content
+func TestCharDataFieldEmpty(t *testing.T) {
+	type EmptyCharData struct {
+		XMLName xml.Name `xml:"test"`
+		Text    string   `xml:",chardata"`
+		Value   string   `xml:"value"`
+	}
+
+	xmlData := []byte(`<test><value>data</value></test>`)
+	var test EmptyCharData
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if test.Value != "data" {
+		t.Errorf("Value: got %s, want data", test.Value)
+	}
+	if test.Text != "" {
+		t.Errorf("Text: got %s, want empty string", test.Text)
+	}
+}
+
+// TestStructWithOnlyWhitespaceCharData tests chardata with only whitespace
+func TestStructWithOnlyWhitespaceCharData(t *testing.T) {
+	type WhitespaceCharData struct {
+		XMLName xml.Name `xml:"test"`
+		Text    string   `xml:",chardata"`
+		Value   string   `xml:"value"`
+	}
+
+	xmlData := []byte(`<test>
+		<value>data</value>
+	</test>`)
+	var test WhitespaceCharData
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if test.Value != "data" {
+		t.Errorf("Value: got %s, want data", test.Value)
+	}
+	// Whitespace-only chardata should be empty after trimming
+	if test.Text != "" {
+		t.Errorf("Text: got '%s', want empty string", test.Text)
+	}
+}
+
+// TestMultipleCharDataFieldCandidates tests struct with multiple chardata tag possibilities
+func TestMultipleCharDataFieldCandidates(t *testing.T) {
+	type MultiCharData struct {
+		XMLName xml.Name `xml:"test"`
+		Text1   string   `xml:",chardata"`
+		Value   string   `xml:"value"`
+	}
+
+	xmlData := []byte(`<test>some text<value>data</value></test>`)
+	var test MultiCharData
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if test.Value != "data" {
+		t.Errorf("Value: got %s, want data", test.Value)
+	}
+	// First chardata field should get the text
+	if test.Text1 != "some text" {
+		t.Errorf("Text1: got '%s', want 'some text'", test.Text1)
+	}
+}
+
+// TestBoolVariations tests different bool value representations
+func TestBoolVariations(t *testing.T) {
+	type BoolTest struct {
+		XMLName xml.Name `xml:"test"`
+		V1      bool     `xml:"v1"`
+		V2      bool     `xml:"v2"`
+		V3      bool     `xml:"v3"`
+		V4      bool     `xml:"v4"`
+	}
+
+	xmlData := []byte(`<test><v1>true</v1><v2>false</v2><v3>1</v3><v4>anything</v4></test>`)
+	var test BoolTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if !test.V1 {
+		t.Error("V1 should be true")
+	}
+	if test.V2 {
+		t.Error("V2 should be false")
+	}
+	if test.V3 {
+		t.Error("V3 (value='1') should be false (only 'true' string is true)")
+	}
+	if test.V4 {
+		t.Error("V4 (value='anything') should be false")
+	}
+}
+
+// TestSliceOfStructs tests slices containing structs
+func TestSliceOfStructs(t *testing.T) {
+	type Item struct {
+		Name  string `xml:"name"`
+		Value int    `xml:"value"`
+	}
+	type Container struct {
+		XMLName xml.Name `xml:"container"`
+		Items   []Item   `xml:"item"`
+	}
+
+	xmlData := []byte(`<container>
+		<item><name>first</name><value>1</value></item>
+		<item><name>second</name><value>2</value></item>
+	</container>`)
+	var c Container
+	err := xmlctx.Unmarshal(xmlData, &c, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if len(c.Items) != 2 {
+		t.Fatalf("Items length: got %d, want 2", len(c.Items))
+	}
+	if c.Items[0].Name != "first" || c.Items[0].Value != 1 {
+		t.Errorf("Items[0]: got {%s, %d}, want {first, 1}", c.Items[0].Name, c.Items[0].Value)
+	}
+	if c.Items[1].Name != "second" || c.Items[1].Value != 2 {
+		t.Errorf("Items[1]: got {%s, %d}, want {second, 2}", c.Items[1].Name, c.Items[1].Value)
+	}
+}
+
+// TestNamespacedIntegerElements tests integer elements with namespaces
+func TestNamespacedIntegerElements(t *testing.T) {
+	type NSNumbers struct {
+		XMLName xml.Name `xml:"root"`
+		Count   int      `xml:"ns1:count"`
+		Total   uint     `xml:"ns1:total"`
+	}
+
+	xmlData := []byte(`<root xmlns:ns1="http://example.com/ns1">
+		<ns1:count>42</ns1:count>
+		<ns1:total>100</ns1:total>
+	</root>`)
+	var nums NSNumbers
+	err := xmlctx.Unmarshal(xmlData, &nums,
+		xmlctx.WithNamespaces(map[string]string{
+			"ns1": "http://example.com/ns1",
+		}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if nums.Count != 42 {
+		t.Errorf("Count: got %d, want 42", nums.Count)
+	}
+	if nums.Total != 100 {
+		t.Errorf("Total: got %d, want 100", nums.Total)
+	}
+}
+
+// TestStructWithUntaggedFields tests struct with fields without xml tags
+func TestStructWithUntaggedFields(t *testing.T) {
+	type MixedStruct struct {
+		XMLName    xml.Name `xml:"test"`
+		Tagged     string   `xml:"tagged"`
+		Untagged   string   // No xml tag
+		AlsoTagged string   `xml:"also"`
+	}
+
+	xmlData := []byte(`<test><tagged>value1</tagged><also>value2</also></test>`)
+	var test MixedStruct
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if test.Tagged != "value1" {
+		t.Errorf("Tagged: got %s, want value1", test.Tagged)
+	}
+	if test.AlsoTagged != "value2" {
+		t.Errorf("AlsoTagged: got %s, want value2", test.AlsoTagged)
+	}
+	// Untagged should remain empty
+	if test.Untagged != "" {
+		t.Errorf("Untagged: got %s, want empty string", test.Untagged)
+	}
+}
+
+// TestStructWithDashTag tests struct with fields tagged with "-"
+func TestStructWithDashTag(t *testing.T) {
+	type IgnoredFieldStruct struct {
+		XMLName xml.Name `xml:"test"`
+		Include string   `xml:"include"`
+		Ignore  string   `xml:"-"`
+	}
+
+	xmlData := []byte(`<test><include>yes</include><ignore>no</ignore></test>`)
+	var test IgnoredFieldStruct
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if test.Include != "yes" {
+		t.Errorf("Include: got %s, want yes", test.Include)
+	}
+	// Field tagged with "-" should be ignored
+	if test.Ignore != "" {
+		t.Errorf("Ignore: got %s, want empty string", test.Ignore)
+	}
+}
+
+// TestComplexNestedNamespaces tests deeply nested structures with multiple namespaces
+func TestComplexNestedNamespaces(t *testing.T) {
+	type Level3 struct {
+		Value string `xml:"ns3:value"`
+	}
+	type Level2 struct {
+		Item   string `xml:"ns2:item"`
+		Level3 Level3 `xml:"ns3:deep"`
+	}
+	type Root struct {
+		XMLName xml.Name `xml:"root"`
+		Name    string   `xml:"ns1:name"`
+		Level2  Level2   `xml:"ns2:mid"`
+	}
+
+	xmlData := []byte(`<root xmlns:ns1="http://ex.com/ns1" xmlns:ns2="http://ex.com/ns2" xmlns:ns3="http://ex.com/ns3">
+		<ns1:name>test</ns1:name>
+		<ns2:mid>
+			<ns2:item>data</ns2:item>
+			<ns3:deep>
+				<ns3:value>nested</ns3:value>
+			</ns3:deep>
+		</ns2:mid>
+	</root>`)
+
+	var root Root
+	err := xmlctx.Unmarshal(xmlData, &root,
+		xmlctx.WithNamespaces(map[string]string{
+			"ns1": "http://ex.com/ns1",
+			"ns2": "http://ex.com/ns2",
+			"ns3": "http://ex.com/ns3",
+		}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if root.Name != "test" {
+		t.Errorf("Name: got %s, want test", root.Name)
+	}
+	if root.Level2.Item != "data" {
+		t.Errorf("Item: got %s, want data", root.Level2.Item)
+	}
+	if root.Level2.Level3.Value != "nested" {
+		t.Errorf("Value: got %s, want nested", root.Level2.Level3.Value)
+	}
+}
+
+// TestEdgeCaseTagFormats tests edge case tag formats that should be skipped
+func TestEdgeCaseTagFormats(t *testing.T) {
+	type EdgeCaseStruct struct {
+		XMLName xml.Name `xml:"test"`
+		// These unusual tag formats should be skipped when finding element fields
+		AttrField   string `xml:"attrField"` // Contains "attr" but not as a flag
+		XmlnsField  string `xml:"xmlnsField"` // Starts with "xmlns"
+		NormalField string `xml:"normal"`
+	}
+
+	// Only "normal" should match as an element field
+	xmlData := []byte(`<test>
+		<normal>value</normal>
+		<attrField>should not match</attrField>
+		<xmlnsField>should not match</xmlnsField>
+	</test>`)
+
+	var test EdgeCaseStruct
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if test.NormalField != "value" {
+		t.Errorf("NormalField: got %s, want value", test.NormalField)
+	}
+	// Fields with "attr" or starting with "xmlns" in the tag name should be skipped
+	if test.AttrField != "" {
+		t.Errorf("AttrField should be empty, got %s", test.AttrField)
+	}
+	if test.XmlnsField != "" {
+		t.Errorf("XmlnsField should be empty, got %s", test.XmlnsField)
 	}
 }
