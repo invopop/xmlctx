@@ -20,7 +20,8 @@ func main() {
 
 	// Define struct with namespace declarations for marshaling
 	type Person struct {
-		XMLName xml.Name `xml:"http://example.com/user person"`
+		XMLName xml.Name `xml:"person"`
+		Xmlns   string   `xml:"xmlns,attr"`
 		XmlnsA  string   `xml:"xmlns:addr,attr"`
 		Name    string   `xml:"name"`
 		Email   string   `xml:"email"`
@@ -38,6 +39,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	fmt.Println(person.XmlnsA)
+	fmt.Println(person.Xmlns)
+
+	out, _ := xml.MarshalIndent(person, "", "  ")
+	fmt.Println(string(out))
 
 	fmt.Printf("Name: %s\n", person.Name)
 	fmt.Printf("Email: %s\n", person.Email)

@@ -2573,3 +2573,342 @@ func TestTextUnmarshalerWithNestedElements(t *testing.T) {
 		t.Errorf("Custom.Value: got %d, want 70", doc.Custom.Value)
 	}
 }
+
+// TestXmlnsAttributes tests capturing xmlns attributes
+func TestXmlnsAttributes(t *testing.T) {
+	type Person struct {
+		XMLName xml.Name `xml:"person"`
+		Xmlns   string   `xml:"xmlns,attr"`
+		XmlnsA  string   `xml:"xmlns:addr,attr"`
+		Name    string   `xml:"name"`
+	}
+
+	xmlData := []byte(`<person xmlns="http://example.com/user" xmlns:addr="http://example.com/address">
+		<name>Jane</name>
+	</person>`)
+
+	var person Person
+	err := xmlctx.Unmarshal(xmlData, &person, xmlctx.WithNamespaces(map[string]string{
+		"":     "http://example.com/user",
+		"addr": "http://example.com/address",
+	}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if person.Xmlns != "http://example.com/user" {
+		t.Errorf("Xmlns: got %q, want %q", person.Xmlns, "http://example.com/user")
+	}
+	if person.XmlnsA != "http://example.com/address" {
+		t.Errorf("XmlnsA: got %q, want %q", person.XmlnsA, "http://example.com/address")
+	}
+	if person.Name != "Jane" {
+		t.Errorf("Name: got %q, want Jane", person.Name)
+	}
+}
+
+// TestPointerToPointer tests pointer to pointer fields
+func TestPointerToPointer(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Value   **string `xml:"value"`
+	}
+
+	xmlData := []byte(`<doc><value>test</value></doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Value == nil || *doc.Value == nil {
+		t.Fatal("Value should not be nil")
+	}
+	if **doc.Value != "test" {
+		t.Errorf("Value: got %s, want test", **doc.Value)
+	}
+}
+
+// TestDeeplyNestedStructs tests deeply nested struct fields
+func TestDeeplyNestedStructs(t *testing.T) {
+	type Level3 struct {
+		Value string `xml:"value"`
+	}
+	type Level2 struct {
+		L3 Level3 `xml:"level3"`
+	}
+	type Level1 struct {
+		L2 Level2 `xml:"level2"`
+	}
+	type Root struct {
+		XMLName xml.Name `xml:"root"`
+		L1      Level1   `xml:"level1"`
+	}
+
+	xmlData := []byte(`<root>
+		<level1>
+			<level2>
+				<level3>
+					<value>deep</value>
+				</level3>
+			</level2>
+		</level1>
+	</root>`)
+
+	var root Root
+	err := xmlctx.Unmarshal(xmlData, &root, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if root.L1.L2.L3.Value != "deep" {
+		t.Errorf("Value: got %s, want deep", root.L1.L2.L3.Value)
+	}
+}
+
+// TestAllFeaturesMixed tests mixing many features together
+func TestAllFeaturesMixed(t *testing.T) {
+	type Extra struct {
+		XMLName xml.Name `xml:"extra"`
+		Data    string   `xml:"data"`
+	}
+
+	type Complex struct {
+		XMLName  xml.Name   `xml:"complex"`
+		Xmlns    string     `xml:"xmlns,attr"`
+		XmlnsNS  string     `xml:"xmlns:ns,attr"`
+		ID       string     `xml:"id,attr"`
+		AnyAttrs []xml.Attr `xml:",any,attr"`
+		Title    string     `xml:"title"`
+		Value    *int       `xml:"value"`
+		NestedID string     `xml:"nested>id"`
+		Comment  string     `xml:",comment"`
+		Extras   []Extra    `xml:",any"`
+	}
+
+	xmlData := []byte(`<complex xmlns="http://example.com" xmlns:ns="http://ns.com" id="123" extra1="v1" extra2="v2">
+		<!-- Test comment -->
+		<title>Test</title>
+		<value>42</value>
+		<nested><id>nested-123</id></nested>
+		<extra><data>extra1</data></extra>
+		<extra><data>extra2</data></extra>
+	</complex>`)
+
+	var c Complex
+	err := xmlctx.Unmarshal(xmlData, &c, xmlctx.WithNamespaces(map[string]string{
+		"":   "http://example.com",
+		"ns": "http://ns.com",
+	}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if c.Xmlns != "http://example.com" {
+		t.Errorf("Xmlns: got %q, want http://example.com", c.Xmlns)
+	}
+	if c.XmlnsNS != "http://ns.com" {
+		t.Errorf("XmlnsNS: got %q, want http://ns.com", c.XmlnsNS)
+	}
+	if c.ID != "123" {
+		t.Errorf("ID: got %s, want 123", c.ID)
+	}
+	if len(c.AnyAttrs) != 2 {
+		t.Errorf("AnyAttrs: got %d, want 2", len(c.AnyAttrs))
+	}
+	if c.Title != "Test" {
+		t.Errorf("Title: got %s, want Test", c.Title)
+	}
+	if c.Value == nil || *c.Value != 42 {
+		t.Errorf("Value: got %v, want 42", c.Value)
+	}
+	if c.NestedID != "nested-123" {
+		t.Errorf("NestedID: got %s, want nested-123", c.NestedID)
+	}
+	if !strings.Contains(c.Comment, "Test comment") {
+		t.Errorf("Comment: got %s", c.Comment)
+	}
+	if len(c.Extras) != 2 {
+		t.Errorf("Extras: got %d, want 2", len(c.Extras))
+	}
+}
+
+// TestEmptyStringElements tests empty string element scenarios
+func TestEmptyStringElements(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Empty1  string   `xml:"empty1"`
+		Empty2  *string  `xml:"empty2"`
+	}
+
+	xmlData := []byte(`<doc>
+		<empty1></empty1>
+		<empty2/>
+	</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Empty1 != "" {
+		t.Errorf("Empty1 should be empty string, got %q", doc.Empty1)
+	}
+	if doc.Empty2 != nil && *doc.Empty2 != "" {
+		t.Errorf("Empty2 should be empty or nil")
+	}
+}
+
+// TestSliceOfPointers tests slice of pointer elements
+func TestSliceOfPointers(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Items   []*string `xml:"item"`
+	}
+
+	xmlData := []byte(`<doc>
+		<item>first</item>
+		<item>second</item>
+		<item>third</item>
+	</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if len(doc.Items) != 3 {
+		t.Fatalf("Items: got %d, want 3", len(doc.Items))
+	}
+	if doc.Items[0] == nil || *doc.Items[0] != "first" {
+		t.Errorf("Items[0]: want first")
+	}
+	if doc.Items[1] == nil || *doc.Items[1] != "second" {
+		t.Errorf("Items[1]: want second")
+	}
+	if doc.Items[2] == nil || *doc.Items[2] != "third" {
+		t.Errorf("Items[2]: want third")
+	}
+}
+
+// TestMixedContentWithChardata tests mixed text and elements with chardata
+func TestMixedContentWithChardata(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Text    string   `xml:",chardata"`
+		Sub     string   `xml:"sub"`
+	}
+
+	xmlData := []byte(`<doc>prefix text<sub>nested</sub>suffix text</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Sub != "nested" {
+		t.Errorf("Sub: got %s, want nested", doc.Sub)
+	}
+	// Text should accumulate all text nodes
+	if !strings.Contains(doc.Text, "prefix") || !strings.Contains(doc.Text, "suffix") {
+		t.Errorf("Text should contain prefix and suffix: got %q", doc.Text)
+	}
+}
+
+// TestPathSyntaxWithAny tests path syntax combined with ,any field
+func TestPathSyntaxWithAny(t *testing.T) {
+	type Extra struct {
+		XMLName xml.Name `xml:"extra"`
+		Value   string   `xml:"value"`
+	}
+
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		ID      string   `xml:"data>id"`
+		Name    string   `xml:"data>name"`
+		Extras  []Extra  `xml:",any"`
+	}
+
+	xmlData := []byte(`<doc>
+		<data>
+			<id>123</id>
+			<name>test</name>
+		</data>
+		<extra><value>e1</value></extra>
+		<extra><value>e2</value></extra>
+	</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.ID != "123" {
+		t.Errorf("ID: got %s, want 123", doc.ID)
+	}
+	if doc.Name != "test" {
+		t.Errorf("Name: got %s, want test", doc.Name)
+	}
+	if len(doc.Extras) != 2 {
+		t.Errorf("Extras: got %d, want 2", len(doc.Extras))
+	}
+}
+
+// TestUnmarshalerWithNamespaces tests xml.Unmarshaler with namespaced content
+func TestUnmarshalerWithNamespaces(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name   `xml:"doc"`
+		Custom  CustomType `xml:"ns:custom"`
+	}
+
+	xmlData := []byte(`<doc xmlns:ns="http://example.com/ns">
+		<ns:custom>value</ns:custom>
+	</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{
+		"ns": "http://example.com/ns",
+	}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Custom.Value != "custom:value" {
+		t.Errorf("Custom.Value: got %s, want custom:value", doc.Custom.Value)
+	}
+}
+
+// TestInnerXMLWithContent tests innerxml capturing content
+func TestInnerXMLWithContent(t *testing.T) {
+	type Doc struct {
+		XMLName  xml.Name `xml:"doc"`
+		InnerXML string   `xml:",innerxml"`
+	}
+
+	xmlData := []byte(`<doc>
+		<data attr="value">
+			<nested>
+				<deep>content</deep>
+			</nested>
+			<another>text</another>
+		</data>
+	</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	// InnerXML should contain the complex structure
+	if !strings.Contains(doc.InnerXML, "<data") ||
+		!strings.Contains(doc.InnerXML, "<nested>") ||
+		!strings.Contains(doc.InnerXML, "<deep>content</deep>") {
+		t.Errorf("InnerXML doesn't preserve structure: %s", doc.InnerXML)
+	}
+}

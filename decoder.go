@@ -735,12 +735,7 @@ func (d *Decoder) decodeAttributes(v reflect.Value, attrs []xml.Attr) error {
 		tagParts := strings.Split(tag, ",")
 		attrName := tagParts[0]
 
-		// Skip xmlns declarations (they're handled by xml.Decoder)
-		if strings.HasPrefix(attrName, "xmlns") {
-			continue
-		}
-
-		// Find matching attribute
+		// Find matching attribute (including xmlns declarations)
 		for attrIdx, attr := range attrs {
 			if d.matchesAttribute(attrName, attr) {
 				// Set the field value
@@ -778,6 +773,19 @@ func (d *Decoder) decodeAttributes(v reflect.Value, attrs []xml.Attr) error {
 func (d *Decoder) matchesAttribute(tag string, attr xml.Attr) bool {
 	// attr.Name.Space contains the namespace URI (if any)
 	// attr.Name.Local contains the attribute name
+
+	// Handle xmlns namespace declarations specially
+	// xmlns:prefix="uri" becomes attr.Name.Space="xmlns" attr.Name.Local="prefix"
+	// xmlns="uri" becomes attr.Name.Space="" attr.Name.Local="xmlns"
+	if strings.HasPrefix(tag, "xmlns") {
+		if tag == "xmlns" {
+			// Match plain xmlns attribute
+			return attr.Name.Local == "xmlns" && attr.Name.Space == ""
+		} else if prefix, ok := strings.CutPrefix(tag, "xmlns:"); ok {
+			// Match xmlns:prefix attribute
+			return attr.Name.Local == prefix && attr.Name.Space == "xmlns"
+		}
+	}
 
 	// Handle namespaced attributes like "ns1:visibility"
 	if strings.Contains(tag, ":") {
