@@ -527,3 +527,372 @@ func TestInvalidNamespaces(t *testing.T) {
 		})
 	}
 }
+
+// TestDecodeErrors tests error handling in Decode
+func TestDecodeErrors(t *testing.T) {
+	t.Run("non-pointer", func(t *testing.T) {
+		xmlData := []byte(`<user><name>John</name></user>`)
+		var user User
+		err := xmlctx.Unmarshal(xmlData, user, xmlctx.WithNamespaces(map[string]string{}))
+		if err == nil {
+			t.Error("Expected error for non-pointer, got nil")
+		}
+	})
+
+	t.Run("nil-pointer", func(t *testing.T) {
+		xmlData := []byte(`<user><name>John</name></user>`)
+		var user *User
+		err := xmlctx.Unmarshal(xmlData, user, xmlctx.WithNamespaces(map[string]string{}))
+		if err == nil {
+			t.Error("Expected error for nil pointer, got nil")
+		}
+	})
+
+	t.Run("empty-xml", func(t *testing.T) {
+		xmlData := []byte(``)
+		var user User
+		err := xmlctx.Unmarshal(xmlData, &user, xmlctx.WithNamespaces(map[string]string{}))
+		// Should handle EOF gracefully
+		if err != nil && err.Error() != "EOF" {
+			t.Errorf("Unexpected error: %v", err)
+		}
+	})
+}
+
+// TestIntegerTypes tests all integer type conversions
+func TestIntegerTypes(t *testing.T) {
+	type AllInts struct {
+		XMLName xml.Name `xml:"ints"`
+		I       int      `xml:"i,attr"`
+		I8      int8     `xml:"i8,attr"`
+		I16     int16    `xml:"i16,attr"`
+		I32     int32    `xml:"i32,attr"`
+		I64     int64    `xml:"i64,attr"`
+		U       uint     `xml:"u,attr"`
+		U8      uint8    `xml:"u8,attr"`
+		U16     uint16   `xml:"u16,attr"`
+		U32     uint32   `xml:"u32,attr"`
+		U64     uint64   `xml:"u64,attr"`
+	}
+
+	xmlData := []byte(`<ints i="42" i8="127" i16="32767" i32="2147483647" i64="9223372036854775807" u="42" u8="255" u16="65535" u32="4294967295" u64="18446744073709551615"></ints>`)
+	var ints AllInts
+	err := xmlctx.Unmarshal(xmlData, &ints, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if ints.I != 42 {
+		t.Errorf("I: got %d, want 42", ints.I)
+	}
+	if ints.I8 != 127 {
+		t.Errorf("I8: got %d, want 127", ints.I8)
+	}
+	if ints.I16 != 32767 {
+		t.Errorf("I16: got %d, want 32767", ints.I16)
+	}
+	if ints.I32 != 2147483647 {
+		t.Errorf("I32: got %d, want 2147483647", ints.I32)
+	}
+	if ints.I64 != 9223372036854775807 {
+		t.Errorf("I64: got %d, want 9223372036854775807", ints.I64)
+	}
+	if ints.U != 42 {
+		t.Errorf("U: got %d, want 42", ints.U)
+	}
+	if ints.U8 != 255 {
+		t.Errorf("U8: got %d, want 255", ints.U8)
+	}
+	if ints.U16 != 65535 {
+		t.Errorf("U16: got %d, want 65535", ints.U16)
+	}
+	if ints.U32 != 4294967295 {
+		t.Errorf("U32: got %d, want 4294967295", ints.U32)
+	}
+	if ints.U64 != 18446744073709551615 {
+		t.Errorf("U64: got %d, want 18446744073709551615", ints.U64)
+	}
+}
+
+// TestIntegerPointers tests integer pointer types
+func TestIntegerPointers(t *testing.T) {
+	type IntPtrs struct {
+		XMLName xml.Name `xml:"ints"`
+		I       *int     `xml:"i,attr"`
+		I8      *int8    `xml:"i8,attr"`
+		I16     *int16   `xml:"i16,attr"`
+		I32     *int32   `xml:"i32,attr"`
+		I64     *int64   `xml:"i64,attr"`
+		U       *uint    `xml:"u,attr"`
+		U8      *uint8   `xml:"u8,attr"`
+		U16     *uint16  `xml:"u16,attr"`
+		U32     *uint32  `xml:"u32,attr"`
+		U64     *uint64  `xml:"u64,attr"`
+	}
+
+	xmlData := []byte(`<ints i="10" i8="20" i16="30" i32="40" i64="50" u="60" u8="70" u16="80" u32="90" u64="100"></ints>`)
+	var ints IntPtrs
+	err := xmlctx.Unmarshal(xmlData, &ints, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if ints.I == nil || *ints.I != 10 {
+		t.Errorf("I: got %v, want 10", ints.I)
+	}
+	if ints.I8 == nil || *ints.I8 != 20 {
+		t.Errorf("I8: got %v, want 20", ints.I8)
+	}
+	if ints.I16 == nil || *ints.I16 != 30 {
+		t.Errorf("I16: got %v, want 30", ints.I16)
+	}
+	if ints.I32 == nil || *ints.I32 != 40 {
+		t.Errorf("I32: got %v, want 40", ints.I32)
+	}
+	if ints.I64 == nil || *ints.I64 != 50 {
+		t.Errorf("I64: got %v, want 50", ints.I64)
+	}
+	if ints.U == nil || *ints.U != 60 {
+		t.Errorf("U: got %v, want 60", ints.U)
+	}
+	if ints.U8 == nil || *ints.U8 != 70 {
+		t.Errorf("U8: got %v, want 70", ints.U8)
+	}
+	if ints.U16 == nil || *ints.U16 != 80 {
+		t.Errorf("U16: got %v, want 80", ints.U16)
+	}
+	if ints.U32 == nil || *ints.U32 != 90 {
+		t.Errorf("U32: got %v, want 90", ints.U32)
+	}
+	if ints.U64 == nil || *ints.U64 != 100 {
+		t.Errorf("U64: got %v, want 100", ints.U64)
+	}
+}
+
+// TestInvalidIntegerConversions tests error handling for invalid integer values
+func TestInvalidIntegerConversions(t *testing.T) {
+	type IntTest struct {
+		XMLName xml.Name `xml:"test"`
+		Value   int      `xml:"value,attr"`
+	}
+
+	xmlData := []byte(`<test value="not-a-number"></test>`)
+	var test IntTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err == nil {
+		t.Error("Expected error for invalid integer, got nil")
+	}
+}
+
+// TestInvalidUintConversions tests error handling for invalid uint values
+func TestInvalidUintConversions(t *testing.T) {
+	type UintTest struct {
+		XMLName xml.Name `xml:"test"`
+		Value   uint     `xml:"value,attr"`
+	}
+
+	xmlData := []byte(`<test value="not-a-number"></test>`)
+	var test UintTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err == nil {
+		t.Error("Expected error for invalid uint, got nil")
+	}
+}
+
+// TestUnsupportedTypes tests error handling for unsupported field types
+func TestUnsupportedTypes(t *testing.T) {
+	type Unsupported struct {
+		XMLName xml.Name `xml:"test"`
+		Value   float64  `xml:"value,attr"`
+	}
+
+	xmlData := []byte(`<test value="3.14"></test>`)
+	var test Unsupported
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err == nil {
+		t.Error("Expected error for unsupported type (float64), got nil")
+	}
+}
+
+// TestNamespacedAttributes tests attributes with namespace prefixes
+func TestNamespacedAttributes(t *testing.T) {
+	type WithNSAttrs struct {
+		XMLName    xml.Name `xml:"test"`
+		NormalAttr string   `xml:"normal,attr"`
+		NSAttr     string   `xml:"ns1:special,attr"`
+	}
+
+	xmlData := []byte(`<test xmlns:ns1="http://example.com/ns1" normal="value1" ns1:special="value2"></test>`)
+	var test WithNSAttrs
+	err := xmlctx.Unmarshal(xmlData, &test,
+		xmlctx.WithNamespaces(map[string]string{
+			"ns1": "http://example.com/ns1",
+		}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if test.NormalAttr != "value1" {
+		t.Errorf("NormalAttr: got %s, want value1", test.NormalAttr)
+	}
+	if test.NSAttr != "value2" {
+		t.Errorf("NSAttr: got %s, want value2", test.NSAttr)
+	}
+}
+
+// TestBooleanValues tests boolean field decoding
+func TestBooleanValues(t *testing.T) {
+	type BoolTest struct {
+		XMLName xml.Name `xml:"test"`
+		True    bool     `xml:"true"`
+		False   bool     `xml:"false"`
+	}
+
+	xmlData := []byte(`<test><true>true</true><false>false</false></test>`)
+	var test BoolTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if !test.True {
+		t.Error("True field should be true")
+	}
+	if test.False {
+		t.Error("False field should be false")
+	}
+}
+
+// TestUnsupportedElementType tests decoding into unsupported element types
+func TestUnsupportedElementType(t *testing.T) {
+	type UnsupportedElem struct {
+		XMLName xml.Name `xml:"test"`
+		Value   float64  `xml:"value"`
+	}
+
+	xmlData := []byte(`<test><value>3.14</value></test>`)
+	var test UnsupportedElem
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err == nil {
+		t.Error("Expected error for unsupported element type (float64), got nil")
+	}
+}
+
+// TestSliceOfUnsupportedTypes tests error propagation in slice decoding
+func TestSliceOfUnsupportedTypes(t *testing.T) {
+	type SliceTest struct {
+		XMLName xml.Name  `xml:"test"`
+		Values  []float64 `xml:"value"`
+	}
+
+	xmlData := []byte(`<test><value>1.1</value></test>`)
+	var test SliceTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err == nil {
+		t.Error("Expected error for slice of unsupported type, got nil")
+	}
+}
+
+// TestStringPointer tests string pointer decoding
+func TestStringPointer(t *testing.T) {
+	type StrPtrTest struct {
+		XMLName xml.Name `xml:"test"`
+		Value   *string  `xml:"value"`
+	}
+
+	xmlData := []byte(`<test><value>hello</value></test>`)
+	var test StrPtrTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if test.Value == nil || *test.Value != "hello" {
+		t.Errorf("Value: got %v, want hello", test.Value)
+	}
+}
+
+// TestBoolPointer tests bool pointer decoding
+func TestBoolPointer(t *testing.T) {
+	type BoolPtrTest struct {
+		XMLName xml.Name `xml:"test"`
+		Value   *bool    `xml:"value"`
+	}
+
+	xmlData := []byte(`<test><value>true</value></test>`)
+	var test BoolPtrTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if test.Value == nil || !*test.Value {
+		t.Errorf("Value: got %v, want true", test.Value)
+	}
+}
+
+// TestNamespacedAttributeNotFound tests namespaced attributes that don't match
+func TestNamespacedAttributeNotFound(t *testing.T) {
+	type NSAttrTest struct {
+		XMLName xml.Name `xml:"test"`
+		Attr    string   `xml:"ns1:special,attr"`
+	}
+
+	// Attribute uses wrong namespace
+	xmlData := []byte(`<test xmlns:ns1="http://example.com/wrong" ns1:special="value"></test>`)
+	var test NSAttrTest
+	err := xmlctx.Unmarshal(xmlData, &test,
+		xmlctx.WithNamespaces(map[string]string{
+			"ns1": "http://example.com/right",
+		}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	// Attribute shouldn't match due to wrong namespace
+	if test.Attr != "" {
+		t.Errorf("Attr should be empty, got %s", test.Attr)
+	}
+}
+
+// TestAttributeWithUnknownPrefix tests attributes with prefixes not in namespace map
+func TestAttributeWithUnknownPrefix(t *testing.T) {
+	type UnknownPrefixTest struct {
+		XMLName xml.Name `xml:"test"`
+		Attr    string   `xml:"unknown:attr,attr"`
+	}
+
+	xmlData := []byte(`<test xmlns:foo="http://example.com/foo" foo:attr="value"></test>`)
+	var test UnknownPrefixTest
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	// Attribute shouldn't match due to unknown prefix in tag
+	if test.Attr != "" {
+		t.Errorf("Attr should be empty, got %s", test.Attr)
+	}
+}
+
+// TestMatchesFieldWithoutNamespace tests matching fields when no default namespace is set
+func TestMatchesFieldWithoutNamespace(t *testing.T) {
+	type NoNSTest struct {
+		XMLName xml.Name `xml:"test"`
+		Value   string   `xml:"value"`
+	}
+
+	xmlData := []byte(`<test><value>hello</value></test>`)
+	var test NoNSTest
+	// No default namespace in the map
+	err := xmlctx.Unmarshal(xmlData, &test, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if test.Value != "hello" {
+		t.Errorf("Value: got %s, want hello", test.Value)
+	}
+}
