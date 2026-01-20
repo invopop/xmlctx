@@ -360,7 +360,9 @@ func (d *Decoder) decodeStruct(decoder *xml.Decoder, v reflect.Value, start xml.
 			case xml.EndElement:
 				if depth == 0 {
 					// End of parent element
-					enc.Flush()
+					if err := enc.Flush(); err != nil {
+						return err
+					}
 					content := buf.String()
 					if innerXMLField.Kind() == reflect.String {
 						innerXMLField.SetString(content)
@@ -697,7 +699,7 @@ func (d *Decoder) decodeAttributes(v reflect.Value, attrs []xml.Attr) error {
 	t := v.Type()
 	matchedAttrs := make(map[int]bool) // Track which attrs were matched
 	var anyAttrField reflect.Value
-	var anyAttrFieldIdx int = -1
+	var anyAttrFieldIdx = -1
 
 	// First pass: find the ,any,attr field if present
 	for i := 0; i < t.NumField(); i++ {

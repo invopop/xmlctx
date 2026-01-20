@@ -2912,3 +2912,97 @@ func TestInnerXMLWithContent(t *testing.T) {
 		t.Errorf("InnerXML doesn't preserve structure: %s", doc.InnerXML)
 	}
 }
+// TestMultiplePathFieldsRecursion tests multiple path fields with 4+ segments
+// This covers lines 296-303 where multiple fields share a common path prefix and are
+// processed recursively together, then marked as found
+func TestMultiplePathFieldsRecursion(t *testing.T) {
+	type Product struct {
+		XMLName xml.Name `xml:"product"`
+		Name    string   `xml:"name"`
+		ID1     string   `xml:"details>identifiers>ids>id1"`
+		ID2     string   `xml:"details>identifiers>ids>id2"`
+		Code1   string   `xml:"details>identifiers>codes>code1"`
+		Code2   string   `xml:"details>identifiers>codes>code2"`
+	}
+
+	xmlData := []byte(`<product>
+		<name>Widget</name>
+		<details>
+			<identifiers>
+				<ids>
+					<id1>ID-001</id1>
+					<id2>ID-002</id2>
+				</ids>
+				<codes>
+					<code1>CODE-001</code1>
+					<code2>CODE-002</code2>
+				</codes>
+			</identifiers>
+		</details>
+	</product>`)
+
+	var prod Product
+	err := xmlctx.Unmarshal(xmlData, &prod, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if prod.Name != "Widget" {
+		t.Errorf("Name = %q, want %q", prod.Name, "Widget")
+	}
+	if prod.ID1 != "ID-001" {
+		t.Errorf("ID1 = %q, want %q", prod.ID1, "ID-001")
+	}
+	if prod.ID2 != "ID-002" {
+		t.Errorf("ID2 = %q, want %q", prod.ID2, "ID-002")
+	}
+	if prod.Code1 != "CODE-001" {
+		t.Errorf("Code1 = %q, want %q", prod.Code1, "CODE-001")
+	}
+	if prod.Code2 != "CODE-002" {
+		t.Errorf("Code2 = %q, want %q", prod.Code2, "CODE-002")
+	}
+}
+
+// TestAnyFieldCatchesUnmatched tests that ,any field catches unmatched elements
+// This covers lines 419-423 where an element doesn't match any regular field
+// but there is a ,any field present to catch it
+func TestAnyFieldCatchesUnmatched(t *testing.T) {
+	type UnmatchedElement struct {
+		XMLName xml.Name `xml:"unmatched"`
+		Value   string   `xml:",chardata"`
+	}
+
+	type Doc struct {
+		XMLName   xml.Name           `xml:"doc"`
+		Name      string             `xml:"name"`
+		Unmatched []UnmatchedElement `xml:",any"`
+	}
+
+	xmlData := []byte(`<doc>
+		<name>test</name>
+		<unmatched>This element doesn't match any regular field</unmatched>
+		<another-unmatched>Also unmatched</another-unmatched>
+	</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Name != "test" {
+		t.Errorf("Name = %q, want %q", doc.Name, "test")
+	}
+
+	if len(doc.Unmatched) != 2 {
+		t.Fatalf("len(Unmatched) = %d, want 2", len(doc.Unmatched))
+	}
+
+	if doc.Unmatched[0].XMLName.Local != "unmatched" {
+		t.Errorf("Unmatched[0].XMLName.Local = %q, want %q", doc.Unmatched[0].XMLName.Local, "unmatched")
+	}
+	if doc.Unmatched[1].XMLName.Local != "another-unmatched" {
+		t.Errorf("Unmatched[1].XMLName.Local = %q, want %q", doc.Unmatched[1].XMLName.Local, "another-unmatched")
+	}
+}
