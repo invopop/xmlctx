@@ -2545,3 +2545,31 @@ func TestXMLNameWithoutNamespace(t *testing.T) {
 		t.Errorf("XMLName.Space: got %s, want empty", item.XMLName.Space)
 	}
 }
+
+// TestTextUnmarshalerWithNestedElements tests TextUnmarshaler with nested XML elements
+func TestTextUnmarshalerWithNestedElements(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name          `xml:"doc"`
+		Custom  TextUnmarshalType `xml:"custom"`
+	}
+
+	// XML with nested elements that should be skipped by TextUnmarshaler
+	xmlData := []byte(`<doc>
+		<custom>
+			<nested>ignored</nested>
+			7
+			<other>also ignored</other>
+		</custom>
+	</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	// TextUnmarshaler should extract "7" and multiply by 10, ignoring nested elements
+	if doc.Custom.Value != 70 {
+		t.Errorf("Custom.Value: got %d, want 70", doc.Custom.Value)
+	}
+}
