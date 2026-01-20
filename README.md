@@ -29,12 +29,14 @@ type Person struct {
 }
 
 var person Person
-err := xmlctx.Parse(xmlData, &person,
+decoder := xmlctx.NewDecoder(
+    bytes.NewReader(xmlData),
     xmlctx.WithNamespaces(map[string]string{
         "":     "http://example.com/user",
         "addr": "http://example.com/address",
     }),
 )
+err := decoder.Decode(&person)
 ```
 
 The XML can use any prefix (`addr:`, `a:`, `address:`, etc.) as long as it maps to the correct namespace URI.
@@ -66,9 +68,13 @@ type User struct {
     Bio     string   `xml:"ns1:bio"`
 }
 
-xmlctx.Parse(data, &user, xmlctx.WithNamespaces(map[string]string{
-    "ns1": "http://example.com/profile",
-}))
+decoder := xmlctx.NewDecoder(
+    bytes.NewReader(data),
+    xmlctx.WithNamespaces(map[string]string{
+        "ns1": "http://example.com/profile",
+    }),
+)
+err := decoder.Decode(&user)
 ```
 
 ## What's supported

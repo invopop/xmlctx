@@ -31,7 +31,7 @@ func main() {
 	var person Person
 	// xmlctx maps "addr" to the address namespace URI
 	// This works even though the XML uses "a:" as the prefix
-	err := xmlctx.Parse(xmlData, &person,
+	err := xmlctx.Unmarshal(xmlData, &person,
 		xmlctx.WithNamespaces(map[string]string{
 			"":     "http://example.com/user",
 			"addr": "http://example.com/address",

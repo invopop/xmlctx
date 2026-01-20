@@ -29,7 +29,7 @@ func main() {
 	}
 
 	var person Person
-	err := xmlctx.Parse(xmlData, &person,
+	err := xmlctx.Unmarshal(xmlData, &person,
 		xmlctx.WithNamespaces(map[string]string{
 			"":     "http://example.com/user",
 			"addr": "http://example.com/address",

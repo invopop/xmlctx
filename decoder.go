@@ -19,12 +19,14 @@
 //	    Email string `xml:"addr:email"`
 //	}
 //
-//	err := xmlctx.Parse(xmlData, &person,
+//	decoder := xmlctx.NewDecoder(
+//	    bytes.NewReader(xmlData),
 //	    xmlctx.WithNamespaces(map[string]string{
 //	        "":     "http://example.com/user",
 //	        "addr": "http://example.com/address",
 //	    }),
 //	)
+//	err := decoder.Decode(&person)
 package xmlctx
 
 import (
@@ -65,8 +67,8 @@ func NewDecoder(r io.Reader, opts ...Option) *Decoder {
 	return d
 }
 
-// Parse decodes XML with namespace context awareness
-func Parse(data []byte, v any, opts ...Option) error {
+// Unmarshal decodes XML with namespace context awareness
+func Unmarshal(data []byte, v any, opts ...Option) error {
 	r := strings.NewReader(string(data))
 	dec := NewDecoder(r, opts...)
 	return dec.Decode(v)
@@ -90,13 +92,13 @@ func (d *Decoder) Decode(v any) error {
 		}
 
 		if start, ok := tok.(xml.StartElement); ok {
-			return d.decodeElement(rv.Elem(), start)
+			return d.decodeElement(d.decoder, rv.Elem(), start)
 		}
 	}
 }
 
 // decodeElement decodes an XML element into a reflect.Value
-func (d *Decoder) decodeElement(v reflect.Value, start xml.StartElement) error {
+func (d *Decoder) decodeElement(decoder *xml.Decoder, v reflect.Value, start xml.StartElement) error {
 	// xml.Decoder has already resolved start.Name.Space to the full URI
 	// start.Name.Local contains the local name without prefix
 
@@ -107,18 +109,18 @@ func (d *Decoder) decodeElement(v reflect.Value, start xml.StartElement) error {
 			v.Set(reflect.New(v.Type().Elem()))
 		}
 		// Decode into the element the pointer points to
-		return d.decodeElement(v.Elem(), start)
+		return d.decodeElement(decoder, v.Elem(), start)
 	case reflect.Struct:
-		return d.decodeStruct(v, start)
+		return d.decodeStruct(decoder, v, start)
 	case reflect.String:
-		return d.decodeString(v)
+		return d.decodeString(decoder, v)
 	case reflect.Bool:
-		return d.decodeBool(v)
+		return d.decodeBool(decoder, v)
 	case reflect.Slice:
 		// For slices, create a new element and decode into it
 		elemType := v.Type().Elem()
 		elem := reflect.New(elemType).Elem()
-		if err := d.decodeElement(elem, start); err != nil {
+		if err := d.decodeElement(decoder, elem, start); err != nil {
 			return err
 		}
 		v.Set(reflect.Append(v, elem))
@@ -129,7 +131,7 @@ func (d *Decoder) decodeElement(v reflect.Value, start xml.StartElement) error {
 }
 
 // decodeStruct decodes an XML element into a struct
-func (d *Decoder) decodeStruct(v reflect.Value, start xml.StartElement) error {
+func (d *Decoder) decodeStruct(decoder *xml.Decoder, v reflect.Value, start xml.StartElement) error {
 	// First, decode attributes
 	if err := d.decodeAttributes(v, start.Attr); err != nil {
 		return err
@@ -143,7 +145,7 @@ func (d *Decoder) decodeStruct(v reflect.Value, start xml.StartElement) error {
 
 	// Then decode child elements
 	for {
-		tok, err := d.decoder.Token()
+		tok, err := decoder.Token()
 		if err == io.EOF {
 			break
 		}
@@ -157,14 +159,14 @@ func (d *Decoder) decodeStruct(v reflect.Value, start xml.StartElement) error {
 			field, err := d.findField(v, tok)
 			if err != nil {
 				// Skip unknown elements
-				if err := d.decoder.Skip(); err != nil {
+				if err := decoder.Skip(); err != nil {
 					return err
 				}
 				continue
 			}
 
 			// Decode into the field
-			if err := d.decodeElement(field, tok); err != nil {
+			if err := d.decodeElement(decoder, field, tok); err != nil {
 				return err
 			}
 
@@ -373,10 +375,10 @@ func (d *Decoder) setFieldValue(v reflect.Value, s string) error {
 }
 
 // decodeString decodes character data into a string field
-func (d *Decoder) decodeString(v reflect.Value) error {
+func (d *Decoder) decodeString(decoder *xml.Decoder, v reflect.Value) error {
 	var s strings.Builder
 	for {
-		tok, err := d.decoder.Token()
+		tok, err := decoder.Token()
 		if err == io.EOF {
 			break
 		}
@@ -396,10 +398,10 @@ func (d *Decoder) decodeString(v reflect.Value) error {
 }
 
 // decodeBool decodes character data into a bool field
-func (d *Decoder) decodeBool(v reflect.Value) error {
+func (d *Decoder) decodeBool(decoder *xml.Decoder, v reflect.Value) error {
 	var s strings.Builder
 	for {
-		tok, err := d.decoder.Token()
+		tok, err := decoder.Token()
 		if err == io.EOF {
 			break
 		}

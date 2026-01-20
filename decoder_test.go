@@ -180,7 +180,7 @@ func TestMarshalUser(t *testing.T) {
 	// Unmarshal back using xmlctx to verify round-trip
 	// (standard xml.Unmarshal doesn't work with namespace-aware tags)
 	var unmarshaledUser User
-	err = xmlctx.Parse(output, &unmarshaledUser,
+	err = xmlctx.Unmarshal(output, &unmarshaledUser,
 		xmlctx.WithNamespaces(map[string]string{
 			"":    DefaultNS,
 			"ns1": NS1URL,
@@ -360,7 +360,7 @@ func TestUnmarshalAllVariations(t *testing.T) {
 			}
 
 			var user User
-			err = xmlctx.Parse(data, &user,
+			err = xmlctx.Unmarshal(data, &user,
 				xmlctx.WithNamespaces(map[string]string{
 					"":    DefaultNS, // default namespace
 					"ns1": NS1URL,    // profile namespace
@@ -509,7 +509,7 @@ func TestInvalidNamespaces(t *testing.T) {
 			}
 
 			var user User
-			err = xmlctx.Parse(data, &user,
+			err = xmlctx.Unmarshal(data, &user,
 				xmlctx.WithNamespaces(map[string]string{
 					"":    DefaultNS,
 					"ns1": NS1URL,

@@ -40,7 +40,7 @@ func main() {
 
 	// Unmarshal back using xmlctx
 	var decoded Person
-	err = xmlctx.Parse(xmlData, &decoded,
+	err = xmlctx.Unmarshal(xmlData, &decoded,
 		xmlctx.WithNamespaces(map[string]string{
 			"":     "http://example.com/user",
 			"addr": "http://example.com/address",
