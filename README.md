@@ -1,6 +1,7 @@
 # xmlctx
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/invopop/xmlctx.svg)](https://pkg.go.dev/github.com/invopop/xmlctx)
+[![codecov](https://codecov.io/github/invopop/xmlctx/graph/badge.svg?token=2VC031QTFC)](https://codecov.io/github/invopop/xmlctx)
 
 Namespace-aware XML decoder for Go.
 
