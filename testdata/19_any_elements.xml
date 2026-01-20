@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config xmlns:ext="http://example.com/extension">
+	<name>My Config</name>
+	<version>1.0</version>
+	<!-- Unknown extension elements below -->
+	<ext:feature>
+		<ext:enabled>true</ext:enabled>
+	</ext:feature>
+	<ext:plugin>
+		<ext:name>analytics</ext:name>
+	</ext:plugin>
+	<unknown-element>data</unknown-element>
+</config>

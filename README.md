@@ -87,6 +87,16 @@ err := decoder.Decode(&user)
 - Namespaced attributes
 - String, bool, integer (int, int8-64, uint, uint8-64), pointer, and slice types
 - Character data (`,chardata` tag)
+- CDATA sections (`,cdata` tag)
+- XML comments (`,comment` tag)
+- Inner XML content (`,innerxml` tag)
+- Path syntax for nested elements (`>` operator, e.g., `xml:"parent>child"`)
+- Catch-all for unmatched elements (`,any` tag)
+- Catch-all for unmatched attributes (`,any,attr` tag)
+- XMLName field for recording element name and namespace
+- Custom unmarshaling via `xml.Unmarshaler` interface
+- Custom attribute unmarshaling via `xml.UnmarshalerAttr` interface
+- Text unmarshaling via `encoding.TextUnmarshaler` interface
 
 ## Examples
 

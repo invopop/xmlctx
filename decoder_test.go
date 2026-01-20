@@ -4,6 +4,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/invopop/xmlctx"
@@ -1806,5 +1808,740 @@ func TestEdgeCaseTagFormats(t *testing.T) {
 	}
 	if test.XmlnsField != "" {
 		t.Errorf("XmlnsField should be empty, got %s", test.XmlnsField)
+	}
+}
+
+// TestPathSyntaxBasic tests basic > path syntax
+func TestPathSyntaxBasic(t *testing.T) {
+	type Address struct {
+		XMLName xml.Name `xml:"address"`
+		Country string   `xml:"location>country"`
+		City    string   `xml:"location>city"`
+	}
+
+	xmlData := []byte(`<address>
+		<location>
+			<country>USA</country>
+			<city>San Francisco</city>
+		</location>
+	</address>`)
+
+	var addr Address
+	err := xmlctx.Unmarshal(xmlData, &addr, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if addr.Country != "USA" {
+		t.Errorf("Country: got %s, want USA", addr.Country)
+	}
+	if addr.City != "San Francisco" {
+		t.Errorf("City: got %s, want San Francisco", addr.City)
+	}
+}
+
+// TestPathSyntaxWithNamespaces tests > path syntax with namespaces
+func TestPathSyntaxWithNamespaces(t *testing.T) {
+	type TradeInfo struct {
+		XMLName xml.Name `xml:"trade"`
+		Origin  string   `xml:"ram:OriginTradeCountry>ram:ID"`
+	}
+
+	xmlData := []byte(`<trade xmlns:ram="http://example.com/ram">
+		<ram:OriginTradeCountry>
+			<ram:ID>US</ram:ID>
+		</ram:OriginTradeCountry>
+	</trade>`)
+
+	var trade TradeInfo
+	err := xmlctx.Unmarshal(xmlData, &trade,
+		xmlctx.WithNamespaces(map[string]string{
+			"ram": "http://example.com/ram",
+		}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if trade.Origin != "US" {
+		t.Errorf("Origin: got %s, want US", trade.Origin)
+	}
+}
+
+// TestPathSyntaxWithPointers tests > path syntax with pointer fields
+func TestPathSyntaxWithPointers(t *testing.T) {
+	type TradeInfo struct {
+		XMLName xml.Name `xml:"trade"`
+		Origin  *string  `xml:"ram:OriginTradeCountry>ram:ID,omitempty"`
+	}
+
+	xmlData := []byte(`<trade xmlns:ram="http://example.com/ram">
+		<ram:OriginTradeCountry>
+			<ram:ID>US</ram:ID>
+		</ram:OriginTradeCountry>
+	</trade>`)
+
+	var trade TradeInfo
+	err := xmlctx.Unmarshal(xmlData, &trade,
+		xmlctx.WithNamespaces(map[string]string{
+			"ram": "http://example.com/ram",
+		}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if trade.Origin == nil {
+		t.Fatal("Origin should not be nil")
+	}
+	if *trade.Origin != "US" {
+		t.Errorf("Origin: got %s, want US", *trade.Origin)
+	}
+}
+
+// TestPathSyntaxDeepNesting tests > path syntax with multiple levels
+func TestPathSyntaxDeepNesting(t *testing.T) {
+	type DeepStruct struct {
+		XMLName xml.Name `xml:"root"`
+		Value   string   `xml:"level1>level2>level3>data"`
+	}
+
+	xmlData := []byte(`<root>
+		<level1>
+			<level2>
+				<level3>
+					<data>deep value</data>
+				</level3>
+			</level2>
+		</level1>
+	</root>`)
+
+	var deep DeepStruct
+	err := xmlctx.Unmarshal(xmlData, &deep, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if deep.Value != "deep value" {
+		t.Errorf("Value: got %s, want 'deep value'", deep.Value)
+	}
+}
+
+// TestPathSyntaxWithSiblings tests > path syntax with sibling elements
+func TestPathSyntaxWithSiblings(t *testing.T) {
+	type Product struct {
+		XMLName xml.Name `xml:"product"`
+		Name    string   `xml:"name"`
+		ID      string   `xml:"details>identifier>id"`
+		Code    string   `xml:"details>identifier>code"`
+	}
+
+	xmlData := []byte(`<product>
+		<name>Widget</name>
+		<details>
+			<identifier>
+				<id>12345</id>
+				<code>WDG-001</code>
+			</identifier>
+		</details>
+	</product>`)
+
+	var prod Product
+	err := xmlctx.Unmarshal(xmlData, &prod, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if prod.Name != "Widget" {
+		t.Errorf("Name: got %s, want Widget", prod.Name)
+	}
+	if prod.ID != "12345" {
+		t.Errorf("ID: got %s, want 12345", prod.ID)
+	}
+	if prod.Code != "WDG-001" {
+		t.Errorf("Code: got %s, want WDG-001", prod.Code)
+	}
+}
+
+// TestPathSyntaxMixedWithNamespaces tests > path syntax with mixed namespace usage
+func TestPathSyntaxMixedWithNamespaces(t *testing.T) {
+	type Document struct {
+		XMLName xml.Name `xml:"document"`
+		Title   string   `xml:"meta>title"`
+		Country string   `xml:"ns1:location>ns1:country"`
+	}
+
+	xmlData := []byte(`<document xmlns:ns1="http://example.com/loc">
+		<meta>
+			<title>Test Doc</title>
+		</meta>
+		<ns1:location>
+			<ns1:country>Germany</ns1:country>
+		</ns1:location>
+	</document>`)
+
+	var doc Document
+	err := xmlctx.Unmarshal(xmlData, &doc,
+		xmlctx.WithNamespaces(map[string]string{
+			"ns1": "http://example.com/loc",
+		}),
+	)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Title != "Test Doc" {
+		t.Errorf("Title: got %s, want 'Test Doc'", doc.Title)
+	}
+	if doc.Country != "Germany" {
+		t.Errorf("Country: got %s, want Germany", doc.Country)
+	}
+}
+
+// TestPathSyntaxWithIntegers tests > path syntax with integer fields
+func TestPathSyntaxWithIntegers(t *testing.T) {
+	type Quantity struct {
+		XMLName xml.Name `xml:"order"`
+		Amount  int      `xml:"details>quantity>amount"`
+	}
+
+	xmlData := []byte(`<order>
+		<details>
+			<quantity>
+				<amount>42</amount>
+			</quantity>
+		</details>
+	</order>`)
+
+	var qty Quantity
+	err := xmlctx.Unmarshal(xmlData, &qty, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if qty.Amount != 42 {
+		t.Errorf("Amount: got %d, want 42", qty.Amount)
+	}
+}
+
+// TestPathSyntaxNotFound tests > path syntax when path doesn't exist
+func TestPathSyntaxNotFound(t *testing.T) {
+	type MissingPath struct {
+		XMLName xml.Name `xml:"root"`
+		Value   string   `xml:"path>to>value"`
+	}
+
+	xmlData := []byte(`<root>
+		<other>
+			<element>data</element>
+		</other>
+	</root>`)
+
+	var mp MissingPath
+	err := xmlctx.Unmarshal(xmlData, &mp, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	// Field should remain empty if path not found
+	if mp.Value != "" {
+		t.Errorf("Value should be empty, got %s", mp.Value)
+	}
+}
+
+// TestInnerXML tests ,innerxml tag
+func TestInnerXML(t *testing.T) {
+	type Document struct {
+		XMLName  xml.Name `xml:"document"`
+		ID       string   `xml:"id,attr"`
+		Title    string   `xml:"title"`
+		InnerXML string   `xml:",innerxml"`
+	}
+
+	xmlData := []byte(`<document id="doc-001">
+		<title>Test</title>
+		<content><data>value</data></content>
+	</document>`)
+
+	var doc Document
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.ID != "doc-001" {
+		t.Errorf("ID: got %s, want doc-001", doc.ID)
+	}
+	// InnerXML should contain everything after title
+	if !strings.Contains(doc.InnerXML, "<content>") || !strings.Contains(doc.InnerXML, "<data>value</data>") {
+		t.Errorf("InnerXML: got %s, want to contain <content><data>value</data></content>", doc.InnerXML)
+	}
+}
+
+// TestInnerXMLBytes tests ,innerxml with []byte field
+func TestInnerXMLBytes(t *testing.T) {
+	type Doc struct {
+		XMLName  xml.Name `xml:"doc"`
+		InnerXML []byte   `xml:",innerxml"`
+	}
+
+	xmlData := []byte(`<doc><a>1</a><b>2</b></doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	innerStr := string(doc.InnerXML)
+	if !strings.Contains(innerStr, "<a>1</a>") || !strings.Contains(innerStr, "<b>2</b>") {
+		t.Errorf("InnerXML bytes: got %s", innerStr)
+	}
+}
+
+// TestAnyElement tests ,any tag for unmatched elements
+func TestAnyElement(t *testing.T) {
+	type Extension struct {
+		XMLName xml.Name `xml:"extension"`
+		Data    string   `xml:"data"`
+	}
+
+	type Config struct {
+		XMLName xml.Name `xml:"config"`
+		Name    string   `xml:"name"`
+		Any     []Extension `xml:",any"`
+	}
+
+	xmlData := []byte(`<config>
+		<name>test</name>
+		<extension><data>ext1</data></extension>
+		<extension><data>ext2</data></extension>
+	</config>`)
+
+	var cfg Config
+	err := xmlctx.Unmarshal(xmlData, &cfg, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if cfg.Name != "test" {
+		t.Errorf("Name: got %s, want test", cfg.Name)
+	}
+	if len(cfg.Any) != 2 {
+		t.Errorf("Any elements: got %d, want 2", len(cfg.Any))
+	}
+	if len(cfg.Any) > 0 && cfg.Any[0].Data != "ext1" {
+		t.Errorf("Any[0].Data: got %s, want ext1", cfg.Any[0].Data)
+	}
+}
+
+// TestAnyAttr tests ,any,attr tag for unmatched attributes
+func TestAnyAttr(t *testing.T) {
+	type Element struct {
+		XMLName xml.Name `xml:"element"`
+		ID      string   `xml:"id,attr"`
+		AnyAttr []xml.Attr `xml:",any,attr"`
+	}
+
+	xmlData := []byte(`<element id="123" version="1.0" status="active" />`)
+
+	var elem Element
+	err := xmlctx.Unmarshal(xmlData, &elem, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if elem.ID != "123" {
+		t.Errorf("ID: got %s, want 123", elem.ID)
+	}
+	if len(elem.AnyAttr) != 2 {
+		t.Errorf("AnyAttr: got %d attributes, want 2", len(elem.AnyAttr))
+	}
+
+	// Check that version and status are in AnyAttr
+	foundVersion := false
+	foundStatus := false
+	for _, attr := range elem.AnyAttr {
+		if attr.Name.Local == "version" && attr.Value == "1.0" {
+			foundVersion = true
+		}
+		if attr.Name.Local == "status" && attr.Value == "active" {
+			foundStatus = true
+		}
+	}
+	if !foundVersion {
+		t.Error("version attribute not found in AnyAttr")
+	}
+	if !foundStatus {
+		t.Error("status attribute not found in AnyAttr")
+	}
+}
+
+// TestCData tests ,cdata tag
+func TestCData(t *testing.T) {
+	type Article struct {
+		XMLName xml.Name `xml:"article"`
+		Title   string   `xml:"title"`
+		Content string   `xml:",cdata"`
+	}
+
+	xmlData := []byte(`<article>
+		<title>Test</title>
+		<![CDATA[Content with <tags> & symbols]]>
+	</article>`)
+
+	var art Article
+	err := xmlctx.Unmarshal(xmlData, &art, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if art.Title != "Test" {
+		t.Errorf("Title: got %s, want Test", art.Title)
+	}
+	expected := "Content with <tags> & symbols"
+	if art.Content != expected {
+		t.Errorf("Content: got %s, want %s", art.Content, expected)
+	}
+}
+
+// TestComments tests ,comment tag
+func TestComments(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Title   string   `xml:"title"`
+		Comment string   `xml:",comment"`
+	}
+
+	xmlData := []byte(`<doc>
+		<!-- First comment -->
+		<title>Test</title>
+		<!-- Second comment -->
+	</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Title != "Test" {
+		t.Errorf("Title: got %s, want Test", doc.Title)
+	}
+	if !strings.Contains(doc.Comment, "First comment") || !strings.Contains(doc.Comment, "Second comment") {
+		t.Errorf("Comment: got %s, expected to contain both comments", doc.Comment)
+	}
+}
+
+// TestCombinedSpecialTags tests multiple special tags together
+func TestCombinedSpecialTags(t *testing.T) {
+	type Advanced struct {
+		XMLName xml.Name   `xml:"advanced"`
+		ID      string     `xml:"id,attr"`
+		AnyAttr []xml.Attr `xml:",any,attr"`
+		Title   string     `xml:"title"`
+		Comment string     `xml:",comment"`
+		Data    string     `xml:",cdata"`
+	}
+
+	xmlData := []byte(`<advanced id="001" version="2.0" status="beta">
+		<!-- Test comment -->
+		<title>Advanced Test</title>
+		<![CDATA[Special <data> here]]>
+		<!-- Another comment -->
+	</advanced>`)
+
+	var adv Advanced
+	err := xmlctx.Unmarshal(xmlData, &adv, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if adv.ID != "001" {
+		t.Errorf("ID: got %s, want 001", adv.ID)
+	}
+	if len(adv.AnyAttr) != 2 {
+		t.Errorf("AnyAttr: got %d, want 2", len(adv.AnyAttr))
+	}
+	if adv.Title != "Advanced Test" {
+		t.Errorf("Title: got %s", adv.Title)
+	}
+	if !strings.Contains(adv.Comment, "Test comment") {
+		t.Errorf("Comment missing 'Test comment': got %s", adv.Comment)
+	}
+	if adv.Data != "Special <data> here" {
+		t.Errorf("Data: got %s", adv.Data)
+	}
+}
+
+// TestInnerXMLWithNamespaces tests innerxml with namespaced content
+func TestInnerXMLWithNamespaces(t *testing.T) {
+	type Doc struct {
+		XMLName  xml.Name `xml:"doc"`
+		InnerXML string   `xml:",innerxml"`
+	}
+
+	xmlData := []byte(`<doc xmlns:ns="http://example.com">
+		<ns:item>value</ns:item>
+		<other>data</other>
+	</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{
+		"ns": "http://example.com",
+	}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	// InnerXML should preserve namespace prefixes
+	if !strings.Contains(doc.InnerXML, "ns:item") && !strings.Contains(doc.InnerXML, "<item") {
+		t.Errorf("InnerXML should contain namespaced element: got %s", doc.InnerXML)
+	}
+}
+
+// TestAnyWithPointer tests ,any with pointer field
+func TestAnyWithPointer(t *testing.T) {
+	type Extra struct {
+		XMLName xml.Name `xml:"extra"`
+		Value   string   `xml:"value"`
+	}
+
+	type Container struct {
+		XMLName xml.Name `xml:"container"`
+		Name    string   `xml:"name"`
+		Any     *Extra   `xml:",any"`
+	}
+
+	xmlData := []byte(`<container>
+		<name>test</name>
+		<extra><value>extra data</value></extra>
+	</container>`)
+
+	var c Container
+	err := xmlctx.Unmarshal(xmlData, &c, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if c.Name != "test" {
+		t.Errorf("Name: got %s, want test", c.Name)
+	}
+	if c.Any == nil {
+		t.Fatal("Any field is nil")
+	}
+	if c.Any.Value != "extra data" {
+		t.Errorf("Any.Value: got %s, want 'extra data'", c.Any.Value)
+	}
+}
+
+// TestEmptyComment tests comment field with no comments
+func TestEmptyComment(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Title   string   `xml:"title"`
+		Comment string   `xml:",comment"`
+	}
+
+	xmlData := []byte(`<doc><title>Test</title></doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Comment != "" {
+		t.Errorf("Comment should be empty, got %s", doc.Comment)
+	}
+}
+
+// TestEmptyInnerXML tests innerxml with no inner content
+func TestEmptyInnerXML(t *testing.T) {
+	type Doc struct {
+		XMLName  xml.Name `xml:"doc"`
+		InnerXML string   `xml:",innerxml"`
+	}
+
+	xmlData := []byte(`<doc></doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.InnerXML != "" {
+		t.Errorf("InnerXML should be empty, got %s", doc.InnerXML)
+	}
+}
+
+// CustomType implements xml.Unmarshaler for custom unmarshaling
+type CustomType struct {
+	Value string
+}
+
+func (c *CustomType) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var s string
+	if err := d.DecodeElement(&s, &start); err != nil {
+		return err
+	}
+	c.Value = "custom:" + s
+	return nil
+}
+
+// TestUnmarshalerInterface tests xml.Unmarshaler interface
+func TestUnmarshalerInterface(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name    `xml:"doc"`
+		Custom  CustomType  `xml:"custom"`
+	}
+
+	xmlData := []byte(`<doc><custom>test</custom></doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Custom.Value != "custom:test" {
+		t.Errorf("Custom.Value: got %s, want 'custom:test'", doc.Custom.Value)
+	}
+}
+
+// CustomAttr implements xml.UnmarshalerAttr for custom attribute unmarshaling
+type CustomAttr struct {
+	Value string
+}
+
+func (c *CustomAttr) UnmarshalXMLAttr(attr xml.Attr) error {
+	c.Value = "attr:" + attr.Value
+	return nil
+}
+
+// TestUnmarshalerAttrInterface tests xml.UnmarshalerAttr interface
+func TestUnmarshalerAttrInterface(t *testing.T) {
+	type Element struct {
+		XMLName xml.Name   `xml:"element"`
+		Custom  CustomAttr `xml:"custom,attr"`
+	}
+
+	xmlData := []byte(`<element custom="value" />`)
+
+	var elem Element
+	err := xmlctx.Unmarshal(xmlData, &elem, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if elem.Custom.Value != "attr:value" {
+		t.Errorf("Custom.Value: got %s, want 'attr:value'", elem.Custom.Value)
+	}
+}
+
+// TextUnmarshalType implements encoding.TextUnmarshaler
+type TextUnmarshalType struct {
+	Value int
+}
+
+func (t *TextUnmarshalType) UnmarshalText(text []byte) error {
+	// Custom parsing: multiply by 10
+	val, err := strconv.Atoi(string(text))
+	if err != nil {
+		return err
+	}
+	t.Value = val * 10
+	return nil
+}
+
+// TestTextUnmarshalerInterface tests encoding.TextUnmarshaler interface
+func TestTextUnmarshalerInterface(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name          `xml:"doc"`
+		Custom  TextUnmarshalType `xml:"custom"`
+	}
+
+	xmlData := []byte(`<doc><custom>5</custom></doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Custom.Value != 50 {
+		t.Errorf("Custom.Value: got %d, want 50", doc.Custom.Value)
+	}
+}
+
+// TestTextUnmarshalerForAttr tests encoding.TextUnmarshaler for attributes
+func TestTextUnmarshalerForAttr(t *testing.T) {
+	type Element struct {
+		XMLName xml.Name          `xml:"element"`
+		Custom  TextUnmarshalType `xml:"custom,attr"`
+	}
+
+	xmlData := []byte(`<element custom="3" />`)
+
+	var elem Element
+	err := xmlctx.Unmarshal(xmlData, &elem, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if elem.Custom.Value != 30 {
+		t.Errorf("Custom.Value: got %d, want 30", elem.Custom.Value)
+	}
+}
+
+// TestXMLNameField tests XMLName field capturing
+func TestXMLNameField(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"document"`
+		Title   string   `xml:"title"`
+	}
+
+	xmlData := []byte(`<document xmlns="http://example.com"><title>Test</title></document>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{
+		"": "http://example.com",
+	}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.XMLName.Local != "document" {
+		t.Errorf("XMLName.Local: got %s, want 'document'", doc.XMLName.Local)
+	}
+	if doc.XMLName.Space != "http://example.com" {
+		t.Errorf("XMLName.Space: got %s, want 'http://example.com'", doc.XMLName.Space)
+	}
+	if doc.Title != "Test" {
+		t.Errorf("Title: got %s, want Test", doc.Title)
+	}
+}
+
+// TestXMLNameWithoutNamespace tests XMLName without namespace
+func TestXMLNameWithoutNamespace(t *testing.T) {
+	type Item struct {
+		XMLName xml.Name `xml:"item"`
+		Value   string   `xml:"value"`
+	}
+
+	xmlData := []byte(`<item><value>data</value></item>`)
+
+	var item Item
+	err := xmlctx.Unmarshal(xmlData, &item, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if item.XMLName.Local != "item" {
+		t.Errorf("XMLName.Local: got %s, want 'item'", item.XMLName.Local)
+	}
+	if item.XMLName.Space != "" {
+		t.Errorf("XMLName.Space: got %s, want empty", item.XMLName.Space)
 	}
 }

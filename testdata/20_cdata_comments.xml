@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article>
+	<!-- This is a test article -->
+	<title>XML Features</title>
+	<!-- Another comment about the content -->
+	<description><![CDATA[This content contains <special> characters & symbols that would normally need escaping]]></description>
+	<!-- Final comment -->
+	<content>Regular text content</content>
+</article>

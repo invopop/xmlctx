@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document xmlns:ns1="http://example.com/schema/profile" id="doc-001">
+	<title>Test Document</title>
+	<content>
+		<ns1:profile visibility="public">
+			<ns1:bio>Software engineer</ns1:bio>
+			<ns1:tag>developer</ns1:tag>
+		</ns1:profile>
+		<metadata>
+			<author>John Doe</author>
+			<date>2024-01-20</date>
+		</metadata>
+	</content>
+</document>
