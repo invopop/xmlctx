@@ -3006,3 +3006,679 @@ func TestAnyFieldCatchesUnmatched(t *testing.T) {
 		t.Errorf("Unmatched[1].XMLName.Local = %q, want %q", doc.Unmatched[1].XMLName.Local, "another-unmatched")
 	}
 }
+
+// TestPathSyntaxWithUnmatchedElement tests skipping unmatched elements in path decoding
+// This covers line 306 where decoder.Skip() is called for unmatched elements
+func TestPathSyntaxWithUnmatchedElement(t *testing.T) {
+	type Product struct {
+		XMLName xml.Name `xml:"product"`
+		ID      string   `xml:"details>identifier>id"`
+	}
+
+	xmlData := []byte(`<product>
+		<details>
+			<unmatched>should be skipped</unmatched>
+			<identifier>
+				<id>12345</id>
+			</identifier>
+		</details>
+	</product>`)
+
+	var prod Product
+	err := xmlctx.Unmarshal(xmlData, &prod, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if prod.ID != "12345" {
+		t.Errorf("ID = %q, want %q", prod.ID, "12345")
+	}
+}
+
+// TestAnyElementWithInvalidXML tests error handling in decodeAnyElement
+// This covers line 585 where decoding fails and Skip is called
+func TestAnyElementWithMixedContent(t *testing.T) {
+	type Simple struct {
+		XMLName xml.Name `xml:"simple"`
+		Value   string   `xml:",chardata"`
+	}
+
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Name    string   `xml:"name"`
+		Others  []Simple `xml:",any"`
+	}
+
+	xmlData := []byte(`<doc>
+		<name>test</name>
+		<simple>value1</simple>
+		<simple>value2</simple>
+	</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Name != "test" {
+		t.Errorf("Name = %q, want %q", doc.Name, "test")
+	}
+
+	if len(doc.Others) != 2 {
+		t.Fatalf("len(Others) = %d, want 2", len(doc.Others))
+	}
+}
+
+// TestEmptyPathSegment tests path with only one segment (invalid)
+// This covers line 269 where paths with < 2 segments are skipped
+func TestPathWithSingleSegment(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Value   string   `xml:"value"`
+	}
+
+	xmlData := []byte(`<doc>
+		<value>test</value>
+	</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Value != "test" {
+		t.Errorf("Value = %q, want %q", doc.Value, "test")
+	}
+}
+
+// TestNestedStartElementInTextUnmarshaler tests nested element skipping
+// This covers line 138 where decoder.Skip() returns an error
+func TestTextUnmarshalerWithDeeplyNestedElements(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name          `xml:"doc"`
+		Custom  TextUnmarshalType `xml:"custom"`
+	}
+
+	xmlData := []byte(`<doc>
+		<custom>
+			<level1>
+				<level2>
+					<level3>deeply nested</level3>
+				</level2>
+			</level1>
+			42
+		</custom>
+	</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	// Should have parsed the numeric content (42 * 10 = 420)
+	if doc.Custom.Value != 420 {
+		t.Errorf("Custom.Value = %d, want 420", doc.Custom.Value)
+	}
+}
+
+// TestSliceWithMultipleIntegers tests integer slices thoroughly
+func TestSliceWithMultipleIntegers(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Values  []int    `xml:"value"`
+	}
+
+	xmlData := []byte(`<doc>
+		<value>1</value>
+		<value>2</value>
+		<value>3</value>
+	</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	expected := []int{1, 2, 3}
+	if len(doc.Values) != len(expected) {
+		t.Fatalf("len(Values) = %d, want %d", len(doc.Values), len(expected))
+	}
+
+	for i, v := range doc.Values {
+		if v != expected[i] {
+			t.Errorf("Values[%d] = %d, want %d", i, v, expected[i])
+		}
+	}
+}
+
+// TestSliceWithUnsignedIntegers tests uint slices
+func TestSliceWithUnsignedIntegers(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Values  []uint   `xml:"value"`
+	}
+
+	xmlData := []byte(`<doc>
+		<value>1</value>
+		<value>2</value>
+		<value>3</value>
+	</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	expected := []uint{1, 2, 3}
+	if len(doc.Values) != len(expected) {
+		t.Fatalf("len(Values) = %d, want %d", len(doc.Values), len(expected))
+	}
+
+	for i, v := range doc.Values {
+		if v != expected[i] {
+			t.Errorf("Values[%d] = %d, want %d", i, v, expected[i])
+		}
+	}
+}
+
+// TestBoolSlice tests bool slices
+func TestBoolSlice(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Flags   []bool   `xml:"flag"`
+	}
+
+	xmlData := []byte(`<doc>
+		<flag>true</flag>
+		<flag>false</flag>
+		<flag>true</flag>
+	</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	expected := []bool{true, false, true}
+	if len(doc.Flags) != len(expected) {
+		t.Fatalf("len(Flags) = %d, want %d", len(doc.Flags), len(expected))
+	}
+
+	for i, v := range doc.Flags {
+		if v != expected[i] {
+			t.Errorf("Flags[%d] = %v, want %v", i, v, expected[i])
+		}
+	}
+}
+
+// TestPathSyntaxWithMultipleLevelsAndUnmatched tests complex path with unmatched siblings
+func TestPathSyntaxWithMultipleLevelsAndUnmatched(t *testing.T) {
+	type Product struct {
+		XMLName xml.Name `xml:"product"`
+		Name    string   `xml:"name"`
+		ID1     string   `xml:"details>level1>level2>id1"`
+		ID2     string   `xml:"details>level1>level2>id2"`
+	}
+
+	xmlData := []byte(`<product>
+		<name>Widget</name>
+		<details>
+			<unmatched1>skip1</unmatched1>
+			<level1>
+				<unmatched2>skip2</unmatched2>
+				<level2>
+					<unmatched3>skip3</unmatched3>
+					<id1>ID-001</id1>
+					<unmatched4>skip4</unmatched4>
+					<id2>ID-002</id2>
+				</level2>
+			</level1>
+		</details>
+	</product>`)
+
+	var prod Product
+	err := xmlctx.Unmarshal(xmlData, &prod, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if prod.Name != "Widget" {
+		t.Errorf("Name = %q, want %q", prod.Name, "Widget")
+	}
+	if prod.ID1 != "ID-001" {
+		t.Errorf("ID1 = %q, want %q", prod.ID1, "ID-001")
+	}
+	if prod.ID2 != "ID-002" {
+		t.Errorf("ID2 = %q, want %q", prod.ID2, "ID-002")
+	}
+}
+
+// TestMixedPathAndRegularFields tests mixing path syntax and regular fields
+func TestMixedPathAndRegularFields(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Title   string   `xml:"title"`
+		DeepID  string   `xml:"container>nested>id"`
+		Footer  string   `xml:"footer"`
+	}
+
+	xmlData := []byte(`<doc>
+		<title>Test</title>
+		<container>
+			<nested>
+				<id>123</id>
+			</nested>
+		</container>
+		<footer>End</footer>
+	</doc>`)
+
+	var doc Doc
+	err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Title != "Test" {
+		t.Errorf("Title = %q, want %q", doc.Title, "Test")
+	}
+	if doc.DeepID != "123" {
+		t.Errorf("DeepID = %q, want %q", doc.DeepID, "123")
+	}
+	if doc.Footer != "End" {
+		t.Errorf("Footer = %q, want %q", doc.Footer, "End")
+	}
+}
+
+// TestUnknownPrefixInField tests that fields with unknown prefixes don't match
+// This covers line 672 where an unknown prefix returns false
+func TestUnknownPrefixInField(t *testing.T) {
+	type Person struct {
+		XMLName xml.Name `xml:"person"`
+		Name    string   `xml:"name"`
+		Value   string   `xml:"unknown:value"` // unknown prefix - should not match anything
+	}
+
+	xmlData := []byte(`<person>
+		<name>Jane</name>
+		<value>This should not be captured</value>
+	</person>`)
+
+	var p Person
+	err := xmlctx.Unmarshal(xmlData, &p, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if p.Name != "Jane" {
+		t.Errorf("Name = %q, want %q", p.Name, "Jane")
+	}
+	if p.Value != "" {
+		t.Errorf("Value = %q, want empty (should not match)", p.Value)
+	}
+}
+
+// TestStructWithAllFieldTypes tests a struct with every field type  
+func TestStructWithAllFieldTypes(t *testing.T) {
+	type ComplexStruct struct {
+		XMLName    xml.Name   `xml:"doc"`
+		ID         string     `xml:"id,attr"`
+		Title      string     `xml:"title"`
+		Count      int        `xml:"count"`
+		Active     bool       `xml:"active"`
+		Tags       []string   `xml:"tag"`
+		OtherAttrs []xml.Attr `xml:",any,attr"`
+	}
+
+	xmlData := []byte(`<doc id="123" custom1="val1" custom2="val2">
+		<title>Test</title>
+		<count>42</count>
+		<active>true</active>
+		<tag>tag1</tag>
+		<tag>tag2</tag>
+	</doc>`)
+
+	var cs ComplexStruct
+	err := xmlctx.Unmarshal(xmlData, &cs, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if cs.ID != "123" {
+		t.Errorf("ID = %q, want %q", cs.ID, "123")
+	}
+	if cs.Title != "Test" {
+		t.Errorf("Title = %q, want %q", cs.Title, "Test")
+	}
+	if cs.Count != 42 {
+		t.Errorf("Count = %d, want 42", cs.Count)
+	}
+	if !cs.Active {
+		t.Errorf("Active = %v, want true", cs.Active)
+	}
+	if len(cs.Tags) != 2 {
+		t.Fatalf("len(Tags) = %d, want 2", len(cs.Tags))
+	}
+	if len(cs.OtherAttrs) != 2 {
+		t.Fatalf("len(OtherAttrs) = %d, want 2", len(cs.OtherAttrs))
+	}
+}
+
+// TestInnerXMLAsBytes tests innerxml field with []byte type
+// This covers line 369-370 where innerxml is stored as bytes
+func TestInnerXMLAsBytes(t *testing.T) {
+	type Document struct {
+		XMLName  xml.Name `xml:"document"`
+		ID       string   `xml:"id,attr"`
+		InnerXML []byte   `xml:",innerxml"`
+	}
+
+	xmlData := []byte(`<document id="doc-001">
+		<content><data>test</data></content>
+	</document>`)
+
+	var doc Document
+	if err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{})); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.ID != "doc-001" {
+		t.Errorf("ID = %q, want %q", doc.ID, "doc-001")
+	}
+
+	if !strings.Contains(string(doc.InnerXML), "<content>") {
+		t.Errorf("InnerXML doesn't contain expected content: %s", string(doc.InnerXML))
+	}
+}
+
+// TestAllIntegerTypes tests all integer type variants
+func TestAllIntegerTypes(t *testing.T) {
+	type Numbers struct {
+		XMLName xml.Name `xml:"numbers"`
+		I       int      `xml:"i"`
+		I8      int8     `xml:"i8"`
+		I16     int16    `xml:"i16"`
+		I32     int32    `xml:"i32"`
+		I64     int64    `xml:"i64"`
+		U       uint     `xml:"u"`
+		U8      uint8    `xml:"u8"`
+		U16     uint16   `xml:"u16"`
+		U32     uint32   `xml:"u32"`
+		U64     uint64   `xml:"u64"`
+	}
+
+	xmlData := []byte(`<numbers>
+		<i>-42</i>
+		<i8>-127</i8>
+		<i16>-32767</i16>
+		<i32>-2147483647</i32>
+		<i64>-9223372036854775807</i64>
+		<u>42</u>
+		<u8>255</u8>
+		<u16>65535</u16>
+		<u32>4294967295</u32>
+		<u64>18446744073709551615</u64>
+	</numbers>`)
+
+	var n Numbers
+	if err := xmlctx.Unmarshal(xmlData, &n, xmlctx.WithNamespaces(map[string]string{})); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if n.I != -42 {
+		t.Errorf("I = %d, want -42", n.I)
+	}
+	if n.U8 != 255 {
+		t.Errorf("U8 = %d, want 255", n.U8)
+	}
+	if n.U64 != 18446744073709551615 {
+		t.Errorf("U64 = %d, want 18446744073709551615", n.U64)
+	}
+}
+
+// TestBoolVariants tests various boolean value representations
+func TestBoolVariants(t *testing.T) {
+	type Flags struct {
+		XMLName xml.Name `xml:"flags"`
+		F1      bool     `xml:"f1"`
+		F2      bool     `xml:"f2"`
+		F3      bool     `xml:"f3"`
+		F4      bool     `xml:"f4"`
+		F5      bool     `xml:"f5"`
+		F6      bool     `xml:"f6"`
+	}
+
+	xmlData := []byte(`<flags>
+		<f1>true</f1>
+		<f2>true</f2>
+		<f3>false</f3>
+		<f4>false</f4>
+		<f5>true</f5>
+		<f6>false</f6>
+	</flags>`)
+
+	var f Flags
+	if err := xmlctx.Unmarshal(xmlData, &f, xmlctx.WithNamespaces(map[string]string{})); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	// Verify all true flags
+	if !f.F1 {
+		t.Errorf("F1 = %v, want true", f.F1)
+	}
+	if !f.F2 {
+		t.Errorf("F2 = %v, want true", f.F2)
+	}
+	if !f.F5 {
+		t.Errorf("F5 = %v, want true", f.F5)
+	}
+
+	// Verify all false flags
+	if f.F3 {
+		t.Errorf("F3 = %v, want false", f.F3)
+	}
+	if f.F4 {
+		t.Errorf("F4 = %v, want false", f.F4)
+	}
+	if f.F6 {
+		t.Errorf("F6 = %v, want false", f.F6)
+	}
+}
+
+// TestPointerToInt tests pointer integer fields
+func TestPointerToInt(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Value   *int     `xml:"value"`
+	}
+
+	xmlData := []byte(`<doc><value>42</value></doc>`)
+
+	var doc Doc
+	if err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{})); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Value == nil || *doc.Value != 42 {
+		t.Errorf("Value = %v, want 42", doc.Value)
+	}
+}
+
+// TestPointerToUint tests pointer unsigned integer fields
+func TestPointerToUint(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Value   *uint    `xml:"value"`
+	}
+
+	xmlData := []byte(`<doc><value>42</value></doc>`)
+
+	var doc Doc
+	if err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{})); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Value == nil || *doc.Value != 42 {
+		t.Errorf("Value = %v, want 42", doc.Value)
+	}
+}
+
+// TestPointerToBool tests pointer boolean fields
+func TestPointerToBool(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Value   *bool    `xml:"value"`
+	}
+
+	xmlData := []byte(`<doc><value>true</value></doc>`)
+
+	var doc Doc
+	if err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{})); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Value == nil || !*doc.Value {
+		t.Errorf("Value = %v, want true", doc.Value)
+	}
+}
+
+
+// TestSliceOfIntsWithPointers tests []* int
+func TestSliceOfIntsWithPointers(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Values  []*int   `xml:"value"`
+	}
+
+	xmlData := []byte(`<doc>
+		<value>1</value>
+		<value>2</value>
+		<value>3</value>
+	</doc>`)
+
+	var doc Doc
+	if err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{})); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if len(doc.Values) != 3 {
+		t.Fatalf("len(Values) = %d, want 3", len(doc.Values))
+	}
+
+	expected := []int{1, 2, 3}
+	for i, val := range doc.Values {
+		if val == nil || *val != expected[i] {
+			t.Errorf("Values[%d] = %v, want %d", i, val, expected[i])
+		}
+	}
+}
+
+// TestSliceOfBoolsWithPointers tests []*bool
+func TestSliceOfBoolsWithPointers(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Flags   []*bool  `xml:"flag"`
+	}
+
+	xmlData := []byte(`<doc>
+		<flag>true</flag>
+		<flag>false</flag>
+	</doc>`)
+
+	var doc Doc
+	if err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{})); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if len(doc.Flags) != 2 {
+		t.Fatalf("len(Flags) = %d, want 2", len(doc.Flags))
+	}
+
+	if doc.Flags[0] == nil || !*doc.Flags[0] {
+		t.Errorf("Flags[0] = %v, want true", doc.Flags[0])
+	}
+	if doc.Flags[1] == nil || *doc.Flags[1] {
+		t.Errorf("Flags[1] = %v, want false", doc.Flags[1])
+	}
+}
+
+// TestComplexPathSyntaxScenario tests path syntax with multiple complex paths
+func TestComplexPathSyntaxScenario(t *testing.T) {
+	type Product struct {
+		XMLName xml.Name `xml:"product"`
+		Name    string   `xml:"name"`
+		// Multiple 3+ level paths
+		DeepID1 string `xml:"container>level1>level2>id1"`
+		DeepID2 string `xml:"container>level1>level2>id2"`
+		// Different path
+		OtherID string `xml:"other>nested>id"`
+	}
+
+	xmlData := []byte(`<product>
+		<name>Widget</name>
+		<container>
+			<level1>
+				<level2>
+					<id1>ID-A</id1>
+					<id2>ID-B</id2>
+				</level2>
+			</level1>
+		</container>
+		<other>
+			<nested>
+				<id>ID-C</id>
+			</nested>
+		</other>
+	</product>`)
+
+	var prod Product
+	if err := xmlctx.Unmarshal(xmlData, &prod, xmlctx.WithNamespaces(map[string]string{})); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if prod.Name != "Widget" {
+		t.Errorf("Name = %q, want %q", prod.Name, "Widget")
+	}
+	if prod.DeepID1 != "ID-A" {
+		t.Errorf("DeepID1 = %q, want %q", prod.DeepID1, "ID-A")
+	}
+	if prod.DeepID2 != "ID-B" {
+		t.Errorf("DeepID2 = %q, want %q", prod.DeepID2, "ID-B")
+	}
+	if prod.OtherID != "ID-C" {
+		t.Errorf("OtherID = %q, want %q", prod.OtherID, "ID-C")
+	}
+}
+
+// TestEmptyElementsWithDifferentTypes tests empty elements with various types
+func TestEmptyElementsWithDifferentTypes(t *testing.T) {
+	type Doc struct {
+		XMLName xml.Name `xml:"doc"`
+		Str     string   `xml:"str"`
+		PtrStr  *string  `xml:"ptrstr"`
+	}
+
+	xmlData := []byte(`<doc>
+		<str></str>
+		<ptrstr></ptrstr>
+	</doc>`)
+
+	var doc Doc
+	if err := xmlctx.Unmarshal(xmlData, &doc, xmlctx.WithNamespaces(map[string]string{})); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if doc.Str != "" {
+		t.Errorf("Str = %q, want empty string", doc.Str)
+	}
+	if doc.PtrStr == nil {
+		t.Error("PtrStr should not be nil")
+	} else if *doc.PtrStr != "" {
+		t.Errorf("PtrStr = %q, want empty string", *doc.PtrStr)
+	}
+}
