@@ -283,3 +283,100 @@ func TestNonEmbeddedStructUnchanged(t *testing.T) {
 		t.Errorf("Items: got %v, want [1 2]", d.Items)
 	}
 }
+
+// diamondA is embedded via two paths in TestDiamondAmbiguityDropped.
+type diamondA struct {
+	Val string `xml:"val"`
+}
+
+type diamondB struct{ diamondA }
+type diamondC struct{ diamondA }
+
+// TestDiamondAmbiguityDropped checks that a field reachable via two equally
+// shallow embed paths is ambiguous and dropped, matching encoding/xml.
+func TestDiamondAmbiguityDropped(t *testing.T) {
+	type doc struct {
+		XMLName xml.Name `xml:"d"`
+		diamondB
+		diamondC
+	}
+
+	xmlData := []byte(`<d><val>x</val></d>`)
+
+	var d doc
+	err := xmlctx.Unmarshal(xmlData, &d, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if d.diamondB.Val != "" {
+		t.Errorf("diamondB.Val should be dropped (empty), got %q", d.diamondB.Val)
+	}
+	if d.diamondC.Val != "" {
+		t.Errorf("diamondC.Val should be dropped (empty), got %q", d.diamondC.Val)
+	}
+}
+
+// deepName is embedded two levels deep in TestShallowShadowsDeep.
+type deepName struct {
+	Name string `xml:"name"`
+}
+
+type midName struct{ deepName }
+
+// TestShallowShadowsDeep checks a depth-0 field shadows a same-tag field
+// promoted from a deeper embed.
+func TestShallowShadowsDeep(t *testing.T) {
+	type doc struct {
+		XMLName xml.Name `xml:"d"`
+		Name    string   `xml:"name"` // depth 0
+		midName          // depth 2 -> deepName.Name
+	}
+
+	xmlData := []byte(`<d><name>z</name></d>`)
+
+	var d doc
+	err := xmlctx.Unmarshal(xmlData, &d, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if d.Name != "z" {
+		t.Errorf("Name: got %q, want z", d.Name)
+	}
+	if d.midName.Name != "" {
+		t.Errorf("deep Name should stay empty (shadowed), got %q", d.midName.Name)
+	}
+}
+
+// sameInner is embedded both directly and via a wrapper at different depths.
+type sameInner struct {
+	Val string `xml:"val"`
+}
+
+type sameWrap struct{ sameInner }
+
+// TestSameTypeDifferentDepth checks that when the same type is reachable at
+// different depths, the shallower instance wins rather than being dropped.
+func TestSameTypeDifferentDepth(t *testing.T) {
+	type doc struct {
+		XMLName   xml.Name `xml:"d"`
+		sameInner          // depth 1
+		sameWrap           // depth 2 -> sameInner
+	}
+
+	xmlData := []byte(`<d><val>y</val></d>`)
+
+	var d doc
+	err := xmlctx.Unmarshal(xmlData, &d, xmlctx.WithNamespaces(map[string]string{}))
+	if err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if d.Val != "y" {
+		t.Errorf("shallow Val: got %q, want y", d.Val)
+	}
+	if d.sameWrap.Val != "" {
+		t.Errorf("deep sameWrap.Val should stay empty, got %q", d.sameWrap.Val)
+	}
+}
