@@ -615,10 +615,24 @@ func (d *Decoder) decodeStruct(decoder *xml.Decoder, v reflect.Value, start xml.
 	return nil
 }
 
+// hasTagOption reports whether the xml tag carries the given option flag,
+// i.e. a comma-separated token after the name (e.g. ",comment", "id,attr").
+// It matches on the exact option token, so a normal element field named
+// "comment" (tag "comment") is NOT mistaken for a ,comment sink.
+func hasTagOption(tag, opt string) bool {
+	parts := strings.Split(tag, ",")
+	for _, p := range parts[1:] {
+		if p == opt {
+			return true
+		}
+	}
+	return false
+}
+
 // findChardataField finds the struct field marked with ,chardata tag
 func (d *Decoder) findChardataField(v reflect.Value) reflect.Value {
 	return dominantField(flattenedFields(v), func(ff flatField) bool {
-		return strings.Contains(ff.field.Tag.Get("xml"), "chardata")
+		return hasTagOption(ff.field.Tag.Get("xml"), "chardata")
 	})
 }
 
@@ -626,14 +640,14 @@ func (d *Decoder) findChardataField(v reflect.Value) reflect.Value {
 func (d *Decoder) findCDataField(v reflect.Value) reflect.Value {
 	return dominantField(flattenedFields(v), func(ff flatField) bool {
 		tag := ff.field.Tag.Get("xml")
-		return strings.Contains(tag, "cdata") && !strings.Contains(tag, "chardata")
+		return hasTagOption(tag, "cdata") && !hasTagOption(tag, "chardata")
 	})
 }
 
 // findInnerXMLField finds the struct field marked with ,innerxml tag
 func (d *Decoder) findInnerXMLField(v reflect.Value) reflect.Value {
 	return dominantField(flattenedFields(v), func(ff flatField) bool {
-		return strings.Contains(ff.field.Tag.Get("xml"), "innerxml")
+		return hasTagOption(ff.field.Tag.Get("xml"), "innerxml")
 	})
 }
 
@@ -642,14 +656,14 @@ func (d *Decoder) findAnyField(v reflect.Value) reflect.Value {
 	return dominantField(flattenedFields(v), func(ff flatField) bool {
 		tag := ff.field.Tag.Get("xml")
 		// Look for ,any but not ,any,attr
-		return strings.Contains(tag, ",any") && !strings.Contains(tag, ",any,attr")
+		return hasTagOption(tag, "any") && !strings.Contains(tag, ",any,attr")
 	})
 }
 
 // findCommentField finds the struct field marked with ,comment tag
 func (d *Decoder) findCommentField(v reflect.Value) reflect.Value {
 	return dominantField(flattenedFields(v), func(ff flatField) bool {
-		return strings.Contains(ff.field.Tag.Get("xml"), "comment")
+		return hasTagOption(ff.field.Tag.Get("xml"), "comment")
 	})
 }
 
