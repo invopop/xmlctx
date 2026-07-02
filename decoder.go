@@ -177,24 +177,99 @@ func (d *Decoder) decodeElement(decoder *xml.Decoder, v reflect.Value, start xml
 	}
 }
 
-
 // pathFieldInfo holds information about a struct field with path syntax
 type pathFieldInfo struct {
 	field reflect.Value
 	tag   string
 }
 
+// flatField is a struct field, possibly promoted from an anonymous embed.
+// value resolves it lazily, so embedded pointers are allocated only when the
+// field is actually used.
+type flatField struct {
+	field reflect.StructField
+	value func() reflect.Value
+}
+
+// flattenedFields returns v's fields plus those promoted from untagged
+// anonymous embedded structs and struct pointers. Fields are breadth-first so
+// shallower ones win on tag conflicts (Go's promotion rule).
+func flattenedFields(v reflect.Value) []flatField {
+	type level struct {
+		t     reflect.Type
+		index []int
+	}
+	var fields []flatField
+	visited := map[reflect.Type]bool{}
+	queue := []level{{t: v.Type()}}
+	for len(queue) > 0 {
+		lvl := queue[0]
+		queue = queue[1:]
+		if visited[lvl.t] {
+			continue
+		}
+		visited[lvl.t] = true
+		for i := 0; i < lvl.t.NumField(); i++ {
+			sf := lvl.t.Field(i)
+			index := make([]int, len(lvl.index)+1)
+			copy(index, lvl.index)
+			index[len(lvl.index)] = i
+
+			if sf.Anonymous && sf.Tag.Get("xml") == "" {
+				ft := sf.Type
+				if ft.Kind() == reflect.Pointer {
+					ft = ft.Elem()
+				}
+				if ft.Kind() == reflect.Struct {
+					// Untagged anonymous struct (or pointer to struct):
+					// flatten its fields at the next depth level.
+					queue = append(queue, level{t: ft, index: index})
+					continue
+				}
+			}
+
+			if sf.PkgPath != "" {
+				// Unexported, non-embedded field: not settable.
+				continue
+			}
+
+			fields = append(fields, flatField{
+				field: sf,
+				value: func() reflect.Value { return fieldByIndexAlloc(v, index) },
+			})
+		}
+	}
+	return fields
+}
+
+// fieldByIndexAlloc is like reflect.Value.FieldByIndex but allocates nil
+// embedded pointers so the result is settable, returning an invalid Value if
+// one cannot be allocated (e.g. unexported).
+func fieldByIndexAlloc(v reflect.Value, index []int) reflect.Value {
+	for i, x := range index {
+		if i > 0 && v.Kind() == reflect.Pointer {
+			if v.IsNil() {
+				if !v.CanSet() {
+					return reflect.Value{}
+				}
+				v.Set(reflect.New(v.Type().Elem()))
+			}
+			v = v.Elem()
+		}
+		v = v.Field(x)
+	}
+	return v
+}
+
 // findAllPathFieldsWithPrefix finds all struct fields whose path starts with the given element
 func (d *Decoder) findAllPathFieldsWithPrefix(v reflect.Value, start xml.StartElement) []pathFieldInfo {
-	t := v.Type()
 	elemNS := start.Name.Space
 	elemLocal := start.Name.Local
 
 	var matches []pathFieldInfo
 
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		tag := field.Tag.Get("xml")
+	for _, ff := range flattenedFields(v) {
+		tag := ff.field.Tag.Get("xml")
 		if tag == "" || tag == "-" {
 			continue
 		}
@@ -224,8 +299,12 @@ func (d *Decoder) findAllPathFieldsWithPrefix(v reflect.Value, start xml.StartEl
 
 		// Check if first segment matches the element
 		if d.matchesField(firstSegment, elemLocal, elemNS) {
+			fv := ff.value()
+			if !fv.IsValid() {
+				continue
+			}
 			matches = append(matches, pathFieldInfo{
-				field: v.Field(i),
+				field: fv,
 				tag:   tagName,
 			})
 		}
@@ -474,16 +553,14 @@ func (d *Decoder) decodeStruct(decoder *xml.Decoder, v reflect.Value, start xml.
 
 // findChardataField finds the struct field marked with ,chardata tag
 func (d *Decoder) findChardataField(v reflect.Value) reflect.Value {
-	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		tag := field.Tag.Get("xml")
+	for _, ff := range flattenedFields(v) {
+		tag := ff.field.Tag.Get("xml")
 		if tag == "" {
 			continue
 		}
 		// Check if this is a chardata field (e.g., ",chardata")
 		if strings.Contains(tag, "chardata") {
-			return v.Field(i)
+			return ff.value()
 		}
 	}
 	return reflect.Value{}
@@ -491,16 +568,14 @@ func (d *Decoder) findChardataField(v reflect.Value) reflect.Value {
 
 // findCDataField finds the struct field marked with ,cdata tag
 func (d *Decoder) findCDataField(v reflect.Value) reflect.Value {
-	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		tag := field.Tag.Get("xml")
+	for _, ff := range flattenedFields(v) {
+		tag := ff.field.Tag.Get("xml")
 		if tag == "" {
 			continue
 		}
 		// Check if this is a cdata field (e.g., ",cdata")
 		if strings.Contains(tag, "cdata") && !strings.Contains(tag, "chardata") {
-			return v.Field(i)
+			return ff.value()
 		}
 	}
 	return reflect.Value{}
@@ -508,15 +583,13 @@ func (d *Decoder) findCDataField(v reflect.Value) reflect.Value {
 
 // findInnerXMLField finds the struct field marked with ,innerxml tag
 func (d *Decoder) findInnerXMLField(v reflect.Value) reflect.Value {
-	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		tag := field.Tag.Get("xml")
+	for _, ff := range flattenedFields(v) {
+		tag := ff.field.Tag.Get("xml")
 		if tag == "" {
 			continue
 		}
 		if strings.Contains(tag, "innerxml") {
-			return v.Field(i)
+			return ff.value()
 		}
 	}
 	return reflect.Value{}
@@ -524,16 +597,14 @@ func (d *Decoder) findInnerXMLField(v reflect.Value) reflect.Value {
 
 // findAnyField finds the struct field marked with ,any tag
 func (d *Decoder) findAnyField(v reflect.Value) reflect.Value {
-	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		tag := field.Tag.Get("xml")
+	for _, ff := range flattenedFields(v) {
+		tag := ff.field.Tag.Get("xml")
 		if tag == "" {
 			continue
 		}
 		// Look for ,any but not ,any,attr
 		if strings.Contains(tag, ",any") && !strings.Contains(tag, ",any,attr") {
-			return v.Field(i)
+			return ff.value()
 		}
 	}
 	return reflect.Value{}
@@ -541,15 +612,13 @@ func (d *Decoder) findAnyField(v reflect.Value) reflect.Value {
 
 // findCommentField finds the struct field marked with ,comment tag
 func (d *Decoder) findCommentField(v reflect.Value) reflect.Value {
-	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		tag := field.Tag.Get("xml")
+	for _, ff := range flattenedFields(v) {
+		tag := ff.field.Tag.Get("xml")
 		if tag == "" {
 			continue
 		}
 		if strings.Contains(tag, "comment") {
-			return v.Field(i)
+			return ff.value()
 		}
 	}
 	return reflect.Value{}
@@ -557,12 +626,13 @@ func (d *Decoder) findCommentField(v reflect.Value) reflect.Value {
 
 // setXMLName sets the XMLName field if present in the struct
 func (d *Decoder) setXMLName(v reflect.Value, start xml.StartElement) error {
-	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
+	for _, ff := range flattenedFields(v) {
 		// Look for a field named XMLName of type xml.Name
-		if field.Name == "XMLName" && field.Type == reflect.TypeOf(xml.Name{}) {
-			v.Field(i).Set(reflect.ValueOf(start.Name))
+		if ff.field.Name == "XMLName" && ff.field.Type == reflect.TypeOf(xml.Name{}) {
+			fv := ff.value()
+			if fv.IsValid() && fv.CanSet() {
+				fv.Set(reflect.ValueOf(start.Name))
+			}
 			return nil
 		}
 	}
@@ -612,17 +682,15 @@ func (d *Decoder) decodeAnyElement(decoder *xml.Decoder, v reflect.Value, start 
 
 // findFieldWithTag finds the struct field that matches the XML element and returns the field and its tag
 func (d *Decoder) findFieldWithTag(v reflect.Value, start xml.StartElement) (reflect.Value, string, error) {
-	t := v.Type()
-
 	// start.Name.Space contains the full namespace URI (already resolved by xml.Decoder)
 	// start.Name.Local contains the local element name
 	elemNS := start.Name.Space
 	elemLocal := start.Name.Local
 
-	// Search through struct fields
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		tag := field.Tag.Get("xml")
+	// Search through struct fields (including promoted fields from anonymous
+	// embedded structs; shallower fields come first and win on conflicts)
+	for _, ff := range flattenedFields(v) {
+		tag := ff.field.Tag.Get("xml")
 		if tag == "" || tag == "-" {
 			continue
 		}
@@ -651,13 +719,16 @@ func (d *Decoder) findFieldWithTag(v reflect.Value, start xml.StartElement) (ref
 
 		// Check if this field matches the element
 		if d.matchesField(firstSegment, elemLocal, elemNS) {
-			return v.Field(i), tagName, nil
+			fv := ff.value()
+			if !fv.IsValid() {
+				continue
+			}
+			return fv, tagName, nil
 		}
 	}
 
 	return reflect.Value{}, "", fmt.Errorf("no field found for element %s (ns: %s)", elemLocal, elemNS)
 }
-
 
 // matchesField checks if a struct tag matches an element
 func (d *Decoder) matchesField(tag, elemLocal, elemNS string) bool {
@@ -696,34 +767,33 @@ func (d *Decoder) matchesField(tag, elemLocal, elemNS string) bool {
 
 // decodeAttributes decodes XML attributes into struct fields
 func (d *Decoder) decodeAttributes(v reflect.Value, attrs []xml.Attr) error {
-	t := v.Type()
-	matchedAttrs := make(map[int]bool) // Track which attrs were matched
+	fields := flattenedFields(v)
+	matchedAttrs := make(map[int]bool)    // Track which attrs were matched
+	assignedTags := make(map[string]bool) // Track attr tags already assigned (shallowest field wins)
 	var anyAttrField reflect.Value
 	var anyAttrFieldIdx = -1
 
 	// First pass: find the ,any,attr field if present
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		tag := field.Tag.Get("xml")
+	for i, ff := range fields {
+		tag := ff.field.Tag.Get("xml")
 		if tag == "" {
 			continue
 		}
 		// Check for ,any,attr
 		if strings.Contains(tag, ",any,attr") {
-			anyAttrField = v.Field(i)
+			anyAttrField = ff.value()
 			anyAttrFieldIdx = i
 			break
 		}
 	}
 
 	// Second pass: match specific attributes
-	for i := 0; i < t.NumField(); i++ {
+	for i, ff := range fields {
 		if i == anyAttrFieldIdx {
 			continue // Skip the ,any,attr field in this pass
 		}
 
-		field := t.Field(i)
-		tag := field.Tag.Get("xml")
+		tag := ff.field.Tag.Get("xml")
 		if tag == "" || !strings.Contains(tag, "attr") {
 			continue
 		}
@@ -737,15 +807,25 @@ func (d *Decoder) decodeAttributes(v reflect.Value, attrs []xml.Attr) error {
 		tagParts := strings.Split(tag, ",")
 		attrName := tagParts[0]
 
+		// Fields are ordered shallowest-first, so if a shallower field
+		// already claimed this attribute tag, deeper promoted fields lose.
+		if assignedTags[attrName] {
+			continue
+		}
+
 		// Find matching attribute (including xmlns declarations)
 		for attrIdx, attr := range attrs {
 			if d.matchesAttribute(attrName, attr) {
 				// Set the field value
-				fv := v.Field(i)
+				fv := ff.value()
+				if !fv.IsValid() {
+					break
+				}
 				if err := d.setFieldValue(fv, attr.Value); err != nil {
 					return err
 				}
 				matchedAttrs[attrIdx] = true
+				assignedTags[attrName] = true
 				break
 			}
 		}
