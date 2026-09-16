@@ -97,6 +97,25 @@ err := decoder.Decode(&user)
 - Custom unmarshaling via `xml.Unmarshaler` interface
 - Custom attribute unmarshaling via `xml.UnmarshalerAttr` interface
 - Text unmarshaling via `encoding.TextUnmarshaler` interface
+- Non-UTF-8 encodings, via `WithCharsetReader`
+
+## Character encodings
+
+`encoding/xml` refuses a document that declares an encoding other than UTF-8
+unless it is given a `CharsetReader`. Supply one with `WithCharsetReader`:
+
+```go
+import "golang.org/x/net/html/charset"
+
+err := xmlctx.Unmarshal(data, &doc,
+    xmlctx.WithNamespaces(ns),
+    xmlctx.WithCharsetReader(charset.NewReaderLabel),
+)
+```
+
+The option takes a function, so the package itself stays dependency-free. It
+does not help with UTF-16: the XML declaration is itself UTF-16, so the decoder
+cannot read it to discover the encoding.
 
 ## Examples
 

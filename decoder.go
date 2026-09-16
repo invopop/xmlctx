@@ -56,6 +56,20 @@ func WithNamespaces(namespaces map[string]string) Option {
 	}
 }
 
+// WithCharsetReader sets the CharsetReader used for documents declaring an
+// encoding other than UTF-8. Without one encoding/xml refuses such a document
+// outright, with "declared but Decoder.CharsetReader is nil". Pass
+// charset.NewReaderLabel from golang.org/x/net/html/charset to accept the
+// encodings seen on the web.
+//
+// It does not help with UTF-16: the declaration is itself UTF-16, so the
+// decoder cannot read it to find the encoding in the first place.
+func WithCharsetReader(fn func(charset string, input io.Reader) (io.Reader, error)) Option {
+	return func(d *Decoder) {
+		d.decoder.CharsetReader = fn
+	}
+}
+
 // NewDecoder creates a new namespace-aware decoder
 func NewDecoder(r io.Reader, opts ...Option) *Decoder {
 	d := &Decoder{
