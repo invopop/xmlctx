@@ -162,3 +162,50 @@ func wantText(t *testing.T, got, want string) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// A payload lifted out of an envelope may carry no declaration of its own,
+// while the envelope names its encoding. A Peppol Business Message Envelope
+// must do so whenever the payload differs from its wrapper, and an HTTP
+// charset parameter says the same thing.
+func TestStatedEncoding(t *testing.T) {
+	const want = "Offre n° 42"
+	const undeclared = `<note><text>Offre n° 42</text></note>`
+
+	t.Run("a document that declares nothing", func(t *testing.T) {
+		var d doc
+		mustDecode(t, xmlctx.Unmarshal(latin1(undeclared), &d, xmlctx.WithEncoding("ISO-8859-1")))
+		wantText(t, d.Text, want)
+	})
+
+	t.Run("without being told, the same bytes are not valid UTF-8", func(t *testing.T) {
+		err := xmlctx.Unmarshal(latin1(undeclared), &doc{})
+		if err == nil {
+			t.Fatal("expected latin-1 bytes to be rejected as UTF-8")
+		}
+	})
+
+	t.Run("a declaration describes the bytes as they arrived", func(t *testing.T) {
+		// Decoded before the XML decoder sees it, so what the document claims
+		// no longer describes what is being read.
+		var d doc
+		mustDecode(t, xmlctx.Unmarshal(
+			latin1(strings.ReplaceAll(sample, "%s", "ISO-8859-1")), &d,
+			xmlctx.WithEncoding("ISO-8859-1")))
+		wantText(t, d.Text, want)
+	})
+
+	t.Run("a byte order mark still wins, being evidence", func(t *testing.T) {
+		// Told latin-1, but the document opens with a UTF-16 mark.
+		var d doc
+		mustDecode(t, xmlctx.Unmarshal(
+			utf16le(strings.ReplaceAll(sample, "%s", "UTF-16")), &d,
+			xmlctx.WithEncoding("ISO-8859-1")))
+		wantText(t, d.Text, want)
+	})
+
+	t.Run("UTF-8 stated, which changes nothing", func(t *testing.T) {
+		var d doc
+		mustDecode(t, xmlctx.Unmarshal([]byte(undeclared), &d, xmlctx.WithEncoding("UTF-8")))
+		wantText(t, d.Text, want)
+	})
+}

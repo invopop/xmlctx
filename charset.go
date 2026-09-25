@@ -25,7 +25,9 @@ var (
 // decoder ever sees it: its declaration is itself UTF-16, so the decoder cannot
 // read far enough to discover the encoding, and CharsetReader is only consulted
 // once the declaration has been parsed.
-func autoReader(r io.Reader) io.Reader {
+// A stated encoding is used when no byte order mark settles it; see
+// WithEncoding.
+func autoReader(r io.Reader, stated string) io.Reader {
 	br := bufio.NewReader(r)
 	prefix, _ := br.Peek(4) // short documents peek short; that is not an error
 	switch {
@@ -42,7 +44,20 @@ func autoReader(r io.Reader) io.Reader {
 		_, _ = br.Discard(len(bomUTF16LE))
 		return &utf16Reader{src: br}
 	}
+	if stated != "" {
+		// The caller knows what the document is; a declaration it carries is
+		// not more reliable than that, and it may carry none at all.
+		if decoded, err := defaultCharsetReader(stated, br); err == nil {
+			return decoded
+		}
+	}
 	return br
+}
+
+// passthroughCharset accepts whatever a document declares without touching it,
+// for bytes already decoded before the XML decoder saw them.
+func passthroughCharset(_ string, input io.Reader) (io.Reader, error) {
+	return input, nil
 }
 
 // NewXMLDecoder returns an encoding/xml decoder with this package's charset
@@ -50,7 +65,7 @@ func autoReader(r io.Reader) io.Reader {
 // Sniffing a document's root element with a plain xml.NewDecoder rejects every
 // encoding but UTF-8, before the document reaches a decoder that could read it.
 func NewXMLDecoder(r io.Reader) *xml.Decoder {
-	dec := xml.NewDecoder(autoReader(r))
+	dec := xml.NewDecoder(autoReader(r, ""))
 	dec.CharsetReader = defaultCharsetReader
 	return dec
 }

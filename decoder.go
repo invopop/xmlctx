@@ -40,8 +40,10 @@ import (
 
 // Decoder wraps xml.Decoder with namespace context awareness
 type Decoder struct {
-	decoder    *xml.Decoder
-	namespaces map[string]string
+	decoder       *xml.Decoder
+	namespaces    map[string]string
+	encoding      string
+	charsetReader func(charset string, input io.Reader) (io.Reader, error)
 }
 
 // Option is a functional option for configuring the Decoder
@@ -62,7 +64,22 @@ func WithNamespaces(namespaces map[string]string) Option {
 // golang.org/x/net/html/charset to accept everything seen on the web.
 func WithCharsetReader(fn func(charset string, input io.Reader) (io.Reader, error)) Option {
 	return func(d *Decoder) {
-		d.decoder.CharsetReader = fn
+		d.charsetReader = fn
+	}
+}
+
+// WithEncoding states the document's encoding, for when it is known from
+// somewhere other than the document. A payload lifted out of an envelope may
+// carry no declaration of its own while the envelope names its encoding: a
+// Peppol Business Message Envelope must do exactly that whenever the payload
+// differs from its wrapper, and an HTTP charset parameter says the same thing.
+//
+// A byte order mark still wins, being evidence rather than assertion. Beyond
+// that the document is read as stated and any declaration it carries is taken
+// to describe the bytes as they arrived, not the ones now being decoded.
+func WithEncoding(label string) Option {
+	return func(d *Decoder) {
+		d.encoding = label
 	}
 }
 
@@ -74,14 +91,22 @@ func WithCharsetReader(fn func(charset string, input io.Reader) (io.Reader, erro
 // but UTF-8, with "declared but Decoder.CharsetReader is nil", which rejects
 // documents that are perfectly valid. Use WithCharsetReader to go wider.
 func NewDecoder(r io.Reader, opts ...Option) *Decoder {
-	dec := xml.NewDecoder(autoReader(r))
-	dec.CharsetReader = defaultCharsetReader
-	d := &Decoder{
-		decoder: dec,
-	}
+	d := new(Decoder)
 	for _, opt := range opts {
 		opt(d)
 	}
+
+	dec := xml.NewDecoder(autoReader(r, d.encoding))
+	switch {
+	case d.charsetReader != nil:
+		dec.CharsetReader = d.charsetReader
+	case d.encoding != "":
+		// Already decoded, so a declaration now describes bytes that are gone.
+		dec.CharsetReader = passthroughCharset
+	default:
+		dec.CharsetReader = defaultCharsetReader
+	}
+	d.decoder = dec
 	return d
 }
 
