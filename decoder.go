@@ -56,10 +56,28 @@ func WithNamespaces(namespaces map[string]string) Option {
 	}
 }
 
-// NewDecoder creates a new namespace-aware decoder
+// WithCharsetReader sets the CharsetReader used for documents declaring an
+// encoding the decoder does not handle itself. The encodings met in European
+// e-invoicing are decoded without it; pass charset.NewReaderLabel from
+// golang.org/x/net/html/charset to accept everything seen on the web.
+func WithCharsetReader(fn func(charset string, input io.Reader) (io.Reader, error)) Option {
+	return func(d *Decoder) {
+		d.decoder.CharsetReader = fn
+	}
+}
+
+// NewDecoder creates a new namespace-aware decoder.
+//
+// The encoding is determined from the document itself: a byte order mark is
+// consumed, UTF-16 is transcoded, and a declared single-byte encoding such as
+// ISO-8859-1 or windows-1252 is decoded. encoding/xml alone refuses anything
+// but UTF-8, with "declared but Decoder.CharsetReader is nil", which rejects
+// documents that are perfectly valid. Use WithCharsetReader to go wider.
 func NewDecoder(r io.Reader, opts ...Option) *Decoder {
+	dec := xml.NewDecoder(autoReader(r))
+	dec.CharsetReader = defaultCharsetReader
 	d := &Decoder{
-		decoder: xml.NewDecoder(r),
+		decoder: dec,
 	}
 	for _, opt := range opts {
 		opt(d)
@@ -176,7 +194,6 @@ func (d *Decoder) decodeElement(decoder *xml.Decoder, v reflect.Value, start xml
 		return fmt.Errorf("unsupported type: %v", v.Kind())
 	}
 }
-
 
 // pathFieldInfo holds information about a struct field with path syntax
 type pathFieldInfo struct {
@@ -657,7 +674,6 @@ func (d *Decoder) findFieldWithTag(v reflect.Value, start xml.StartElement) (ref
 
 	return reflect.Value{}, "", fmt.Errorf("no field found for element %s (ns: %s)", elemLocal, elemNS)
 }
-
 
 // matchesField checks if a struct tag matches an element
 func (d *Decoder) matchesField(tag, elemLocal, elemNS string) bool {
