@@ -40,8 +40,10 @@ import (
 
 // Decoder wraps xml.Decoder with namespace context awareness
 type Decoder struct {
-	decoder    *xml.Decoder
-	namespaces map[string]string
+	decoder       *xml.Decoder
+	namespaces    map[string]string
+	encoding      string
+	charsetReader func(charset string, input io.Reader) (io.Reader, error)
 }
 
 // Option is a functional option for configuring the Decoder
@@ -56,14 +58,51 @@ func WithNamespaces(namespaces map[string]string) Option {
 	}
 }
 
-// NewDecoder creates a new namespace-aware decoder
-func NewDecoder(r io.Reader, opts ...Option) *Decoder {
-	d := &Decoder{
-		decoder: xml.NewDecoder(r),
+// WithCharsetReader sets the CharsetReader for encodings the decoder does not
+// handle itself. Pass charset.NewReaderLabel from
+// golang.org/x/net/html/charset to accept everything seen on the web.
+func WithCharsetReader(fn func(charset string, input io.Reader) (io.Reader, error)) Option {
+	return func(d *Decoder) {
+		d.charsetReader = fn
 	}
+}
+
+// WithEncoding states an encoding known from outside the document: a payload
+// lifted out of an envelope may declare nothing while its wrapper names the
+// encoding, as a Peppol envelope or an HTTP charset parameter does.
+//
+// A byte order mark still wins, being evidence rather than assertion. Otherwise
+// the document is read as stated, and a declaration it carries is taken to
+// describe the bytes as they arrived rather than the ones being decoded.
+func WithEncoding(label string) Option {
+	return func(d *Decoder) {
+		d.encoding = label
+	}
+}
+
+// NewDecoder creates a new namespace-aware decoder.
+//
+// The encoding is taken from the document: a byte order mark is consumed,
+// UTF-16 transcoded, and a declared ISO-8859-1 or windows-1252 decoded.
+// encoding/xml alone refuses all but UTF-8, rejecting valid documents with
+// "declared but Decoder.CharsetReader is nil".
+func NewDecoder(r io.Reader, opts ...Option) *Decoder {
+	d := new(Decoder)
 	for _, opt := range opts {
 		opt(d)
 	}
+
+	dec := xml.NewDecoder(autoReader(r, d.encoding))
+	switch {
+	case d.charsetReader != nil:
+		dec.CharsetReader = d.charsetReader
+	case d.encoding != "":
+		// Already decoded, so any declaration describes bytes that are gone.
+		dec.CharsetReader = passthroughCharset
+	default:
+		dec.CharsetReader = defaultCharsetReader
+	}
+	d.decoder = dec
 	return d
 }
 
@@ -176,7 +215,6 @@ func (d *Decoder) decodeElement(decoder *xml.Decoder, v reflect.Value, start xml
 		return fmt.Errorf("unsupported type: %v", v.Kind())
 	}
 }
-
 
 // pathFieldInfo holds information about a struct field with path syntax
 type pathFieldInfo struct {
@@ -657,7 +695,6 @@ func (d *Decoder) findFieldWithTag(v reflect.Value, start xml.StartElement) (ref
 
 	return reflect.Value{}, "", fmt.Errorf("no field found for element %s (ns: %s)", elemLocal, elemNS)
 }
-
 
 // matchesField checks if a struct tag matches an element
 func (d *Decoder) matchesField(tag, elemLocal, elemNS string) bool {
