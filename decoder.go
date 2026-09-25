@@ -58,9 +58,8 @@ func WithNamespaces(namespaces map[string]string) Option {
 	}
 }
 
-// WithCharsetReader sets the CharsetReader used for documents declaring an
-// encoding the decoder does not handle itself. The encodings met in European
-// e-invoicing are decoded without it; pass charset.NewReaderLabel from
+// WithCharsetReader sets the CharsetReader for encodings the decoder does not
+// handle itself. Pass charset.NewReaderLabel from
 // golang.org/x/net/html/charset to accept everything seen on the web.
 func WithCharsetReader(fn func(charset string, input io.Reader) (io.Reader, error)) Option {
 	return func(d *Decoder) {
@@ -68,15 +67,13 @@ func WithCharsetReader(fn func(charset string, input io.Reader) (io.Reader, erro
 	}
 }
 
-// WithEncoding states the document's encoding, for when it is known from
-// somewhere other than the document. A payload lifted out of an envelope may
-// carry no declaration of its own while the envelope names its encoding: a
-// Peppol Business Message Envelope must do exactly that whenever the payload
-// differs from its wrapper, and an HTTP charset parameter says the same thing.
+// WithEncoding states an encoding known from outside the document: a payload
+// lifted out of an envelope may declare nothing while its wrapper names the
+// encoding, as a Peppol envelope or an HTTP charset parameter does.
 //
-// A byte order mark still wins, being evidence rather than assertion. Beyond
-// that the document is read as stated and any declaration it carries is taken
-// to describe the bytes as they arrived, not the ones now being decoded.
+// A byte order mark still wins, being evidence rather than assertion. Otherwise
+// the document is read as stated, and a declaration it carries is taken to
+// describe the bytes as they arrived rather than the ones being decoded.
 func WithEncoding(label string) Option {
 	return func(d *Decoder) {
 		d.encoding = label
@@ -85,11 +82,10 @@ func WithEncoding(label string) Option {
 
 // NewDecoder creates a new namespace-aware decoder.
 //
-// The encoding is determined from the document itself: a byte order mark is
-// consumed, UTF-16 is transcoded, and a declared single-byte encoding such as
-// ISO-8859-1 or windows-1252 is decoded. encoding/xml alone refuses anything
-// but UTF-8, with "declared but Decoder.CharsetReader is nil", which rejects
-// documents that are perfectly valid. Use WithCharsetReader to go wider.
+// The encoding is taken from the document: a byte order mark is consumed,
+// UTF-16 transcoded, and a declared ISO-8859-1 or windows-1252 decoded.
+// encoding/xml alone refuses all but UTF-8, rejecting valid documents with
+// "declared but Decoder.CharsetReader is nil".
 func NewDecoder(r io.Reader, opts ...Option) *Decoder {
 	d := new(Decoder)
 	for _, opt := range opts {
@@ -101,7 +97,7 @@ func NewDecoder(r io.Reader, opts ...Option) *Decoder {
 	case d.charsetReader != nil:
 		dec.CharsetReader = d.charsetReader
 	case d.encoding != "":
-		// Already decoded, so a declaration now describes bytes that are gone.
+		// Already decoded, so any declaration describes bytes that are gone.
 		dec.CharsetReader = passthroughCharset
 	default:
 		dec.CharsetReader = defaultCharsetReader

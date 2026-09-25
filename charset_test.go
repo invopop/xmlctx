@@ -46,9 +46,8 @@ func utf16be(s string) []byte {
 	return buf.Bytes()
 }
 
-// Peppol's envelope specification requires only that the envelope and the
-// document it carries share an encoding, and gives its own examples in
-// ISO-8859-1. encoding/xml alone refuses every one of these.
+// Peppol asks only that envelope and payload share an encoding, and gives its
+// own examples in ISO-8859-1. encoding/xml alone refuses every one of these.
 func TestCharsetDetection(t *testing.T) {
 	const want = "Offre n° 42"
 
@@ -163,10 +162,8 @@ func wantText(t *testing.T, got, want string) {
 	}
 }
 
-// A payload lifted out of an envelope may carry no declaration of its own,
-// while the envelope names its encoding. A Peppol Business Message Envelope
-// must do so whenever the payload differs from its wrapper, and an HTTP
-// charset parameter says the same thing.
+// A payload lifted out of an envelope may declare nothing while its wrapper
+// names the encoding, as a Peppol envelope or an HTTP charset parameter does.
 func TestStatedEncoding(t *testing.T) {
 	const want = "Offre n° 42"
 	const undeclared = `<note><text>Offre n° 42</text></note>`
@@ -185,8 +182,8 @@ func TestStatedEncoding(t *testing.T) {
 	})
 
 	t.Run("a declaration describes the bytes as they arrived", func(t *testing.T) {
-		// Decoded before the XML decoder sees it, so what the document claims
-		// no longer describes what is being read.
+		// Decoded before the XML decoder sees it, so the declaration no longer
+		// describes what is being read.
 		var d doc
 		mustDecode(t, xmlctx.Unmarshal(
 			latin1(strings.ReplaceAll(sample, "%s", "ISO-8859-1")), &d,
